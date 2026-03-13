@@ -1,0 +1,57 @@
+{
+  "name": "ontopic-desktop",
+  "version": "0.1.0",
+  "description": "OnTopic Desktop — Electron app with system-level audio capture",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "vite build && electron-builder",
+    "build:win": "vite build && electron-builder --win",
+    "build:mac": "vite build && electron-builder --mac",
+    "build:linux": "vite build && electron-builder --linux",
+    "pack": "electron-builder --dir"
+  },
+  "keywords": [
+    "presales",
+    "ai",
+    "audio",
+    "electron",
+    "meeting"
+  ],
+  "author": "mwpetroff",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "naudiodon": "^2.0.4",
+    "node-record-lpcm16": "^1.0.1"
+  },
+  "build": {
+    "appId": "com.ontopic.desktop",
+    "productName": "OnTopic",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
+  }
+}
