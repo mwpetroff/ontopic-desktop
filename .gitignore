@@ -1,0 +1,48 @@
+# Dependencies
+  node_modules/
+  .pnp
+  .pnp.js
+
+  # Build outputs
+  dist/
+  dist-electron/
+  out/
+  build/
+
+  # Electron
+  *.dmg
+  *.exe
+  *.AppImage
+  *.deb
+  *.rpm
+
+  # Environment
+  .env
+  .env.local
+  .env.*.local
+
+  # Editor
+  .vscode/*
+  !.vscode/extensions.json
+  .idea/
+  *.suo
+  *.ntvs*
+  *.njsproj
+  *.sln
+  *.sw?
+  .DS_Store
+  Thumbs.db
+
+  # Logs
+  logs/
+  *.log
+  npm-debug.log*
+
+  # Testing
+  coverage/
+
+  # Replit
+  .replit
+  .local/
+  replit.nix
+  
