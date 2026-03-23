@@ -40,6 +40,7 @@
       while (this._buffers[label].length >= this.chunkBytes) {
         const chunk = this._buffers[label].slice(0, this.chunkBytes);
         this._buffers[label] = this._buffers[label].slice(this.chunkBytes);
+        console.log(`[AudioMixer] chunk fired — label=${label} bytes=${chunk.length}`);
         this.onChunk?.(chunk, label);
       }
     }
@@ -48,9 +49,13 @@
     stop() {
       this._active = false;
       for (const [label, buf] of Object.entries(this._buffers)) {
-        if (buf.length > 0) this.onChunk?.(buf, label);
+        if (buf.length > 0) {
+          console.log(`[AudioMixer] flush on stop — label=${label} bytes=${buf.length}`);
+          this.onChunk?.(buf, label);
+        }
       }
       this._buffers = {};
+      console.log("[AudioMixer] stopped");
     }
   }
 

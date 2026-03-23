@@ -11,16 +11,67 @@
 
   const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
   const path = require("path");
+  const { spawn } = require("child_process");
+  const portAudio = require("naudiodon");
   const { MicCapture } = require("./audio/mic-capture");
   const { SpeakerCapture } = require("./audio/speaker-capture");
   const { AudioMixer } = require("./audio/audio-mixer");
 
   const isDev = process.env.NODE_ENV === "development";
 
+  // ─── Settings Store ───────────────────────────────────────────────────────────
+  // electron-store is ESM-only in v9+; use dynamic import.
+  let store = null;
+  async function getStore() {
+    if (!store) {
+      const { default: Store } = await import("electron-store");
+      store = new Store({
+        schema: {
+          openaiApiKey: { type: "string", default: "" },
+        },
+      });
+    }
+    return store;
+  }
+
   let mainWindow = null;
   let tray = null;
   let audioMixer = null;
   let isCapturing = false;
+  let serverProcess = null;
+
+  // ─── Express Backend ──────────────────────────────────────────────────────────
+
+  async function startServer() {
+    const s = await getStore();
+    const apiKey = s.get("openaiApiKey") || "";
+
+    const serverScript = path.join(__dirname, "../server/index.ts");
+    const tsxBin = path.join(__dirname, "../node_modules/.bin/tsx");
+
+    serverProcess = spawn(tsxBin, [serverScript], {
+      env: {
+        ...process.env,
+        NODE_ENV: isDev ? "development" : "production",
+        PORT: "3000",
+        ELECTRON: "true",
+        OPENAI_API_KEY: apiKey,
+      },
+      stdio: "inherit",
+    });
+
+    serverProcess.on("error", (err) => {
+      console.error("[main] Failed to start server process:", err.message);
+    });
+
+    serverProcess.on("exit", (code) => {
+      if (code !== 0 && code !== null) {
+        console.error(`[main] Server process exited with code ${code}`);
+      }
+    });
+
+    console.log("[main] Express server starting on port 3000");
+  }
 
   // ─── Window ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +119,7 @@
 
   // ─── Audio Capture ────────────────────────────────────────────────────────────
 
-  async function startCapture() {
+  async function startCapture({ micDeviceId = -1 } = {}) {
     if (isCapturing) return;
     isCapturing = true;
 
@@ -77,16 +128,29 @@
       channels: 1,
       chunkMs: 5000, // 5-second chunks → Whisper transcription
       onChunk: (chunk, label) => {
-        // Send PCM chunk to renderer for transcription
-        mainWindow?.webContents.send("audio:chunk", { buffer: chunk, label });
+        if (mainWindow) {
+          mainWindow.webContents.send("audio:chunk", { buffer: chunk, label });
+          console.log(`[main] audio:chunk sent — label=${label} bytes=${chunk.length}`);
+        } else {
+          console.warn("[main] audio:chunk dropped — no renderer window");
+        }
       },
     });
 
-    const mic = new MicCapture({ sampleRate: 16000, channels: 1 });
+    const mic = new MicCapture({ sampleRate: 16000, channels: 1, deviceId: micDeviceId });
     const speaker = new SpeakerCapture({ sampleRate: 16000, channels: 1 });
 
-    mic.on("data", (pcm) => audioMixer.push("mic", pcm));
-    speaker.on("data", (pcm) => audioMixer.push("speaker", pcm));
+    mic.on("data",  (pcm) => audioMixer.push("mic", pcm));
+    mic.on("error", (err) => {
+      console.error("[main] MicCapture error:", err.message);
+      mainWindow?.webContents.send("capture:error", { source: "mic", message: err.message });
+    });
+
+    speaker.on("data",  (pcm) => audioMixer.push("speaker", pcm));
+    speaker.on("error", (err) => {
+      console.error("[main] SpeakerCapture error:", err.message);
+      mainWindow?.webContents.send("capture:error", { source: "speaker", message: err.message });
+    });
 
     await mic.start();
     await speaker.start();
@@ -104,15 +168,60 @@
 
   // ─── IPC Handlers ─────────────────────────────────────────────────────────────
 
-  ipcMain.handle("capture:start", async () => { await startCapture(); return { ok: true }; });
-  ipcMain.handle("capture:stop",  ()  => { stopCapture(); return { ok: true }; });
-  ipcMain.handle("capture:status", () => ({ active: isCapturing }));
+  ipcMain.handle("capture:start", async (_e, opts) => {
+    console.log("[main] IPC capture:start — opts:", opts);
+    await startCapture(opts);
+    return { ok: true };
+  });
 
-  ipcMain.handle("platform:get", () => process.platform); // "win32" | "darwin" | "linux"
+  ipcMain.handle("capture:stop", () => {
+    console.log("[main] IPC capture:stop");
+    stopCapture();
+    return { ok: true };
+  });
+
+  ipcMain.handle("capture:status", () => {
+    console.log("[main] IPC capture:status — active:", isCapturing);
+    return { active: isCapturing };
+  });
+
+  ipcMain.handle("platform:get", () => process.platform);
+
+  // ─── API Key Management ───────────────────────────────────────────────────────
+
+  ipcMain.handle("settings:getApiKey", async () => {
+    const s = await getStore();
+    return s.get("openaiApiKey") || "";
+  });
+
+  ipcMain.handle("settings:setApiKey", async (_e, key) => {
+    const s = await getStore();
+    s.set("openaiApiKey", key);
+    // Restart server so it picks up the new key immediately.
+    if (serverProcess) {
+      serverProcess.kill();
+      serverProcess = null;
+    }
+    await startServer();
+    console.log("[main] API key updated — server restarted");
+    return { ok: true };
+  });
+
+  // Return all input devices so the renderer can present a "choose mic" UI.
+  // Each entry: { id, name, hostAPIName }
+  ipcMain.handle("devices:list", () => {
+    const all = portAudio.getDevices();
+    const inputs = all
+      .filter((d) => d.maxInputChannels > 0)
+      .map(({ id, name, hostAPIName }) => ({ id, name, hostAPIName }));
+    console.log(`[main] IPC devices:list — returning ${inputs.length} input devices`);
+    return inputs;
+  });
 
   // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
   app.whenReady().then(() => {
+    startServer();
     createWindow();
     createTray();
   });
@@ -125,5 +234,8 @@
     if (!mainWindow) createWindow();
   });
 
-  app.on("before-quit", () => stopCapture());
+  app.on("before-quit", () => {
+    stopCapture();
+    serverProcess?.kill();
+  });
   

@@ -1,48 +1,50 @@
 # Dependencies
-  node_modules/
-  .pnp
-  .pnp.js
+node_modules/
+.pnp
+.pnp.js
 
-  # Build outputs
-  dist/
-  dist-electron/
-  out/
-  build/
+# Build outputs
+dist/
+dist-electron/
+out/
+build/
 
-  # Electron
-  *.dmg
-  *.exe
-  *.AppImage
-  *.deb
-  *.rpm
+# Electron
+*.dmg
+*.exe
+*.AppImage
+*.deb
+*.rpm
 
-  # Environment
-  .env
-  .env.local
-  .env.*.local
+# Environment
+.env
+.env.local
+.env.*.local
 
-  # Editor
-  .vscode/*
-  !.vscode/extensions.json
-  .idea/
-  *.suo
-  *.ntvs*
-  *.njsproj
-  *.sln
-  *.sw?
-  .DS_Store
-  Thumbs.db
+# Claude Code local memory
+.claude/
 
-  # Logs
-  logs/
-  *.log
-  npm-debug.log*
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
 
-  # Testing
-  coverage/
+# Logs
+logs/
+*.log
+npm-debug.log*
 
-  # Replit
-  .replit
-  .local/
-  replit.nix
-  
+# Testing
+coverage/
+
+# Replit
+.replit
+.local/
+replit.nix

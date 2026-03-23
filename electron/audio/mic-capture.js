@@ -1,45 +1,66 @@
 /**
-   * Microphone Capture (all platforms)
-   *
-   * Uses naudiodon (PortAudio Node binding) to capture the default
-   * input device at 16 kHz mono — the format Whisper expects.
-   *
-   * Emits "data" events with raw PCM Buffer chunks.
+ * Microphone Capture (all platforms)
+ *
+ * Uses naudiodon (PortAudio) to capture the selected (or default) input device
+ * at 16 kHz mono — the format Whisper expects.
+ *
+ * Emits:
+ *   "data"  — Buffer of raw 16-bit PCM samples
+ *   "error" — Error if the stream fails to open or encounters a device error
+ */
+
+const { EventEmitter } = require("events");
+const portAudio = require("naudiodon");
+
+class MicCapture extends EventEmitter {
+  /**
+   * @param {object} opts
+   * @param {number} [opts.sampleRate=16000]
+   * @param {number} [opts.channels=1]
+   * @param {number} [opts.deviceId=-1]  -1 = system default input device
    */
+  constructor({ sampleRate = 16000, channels = 1, deviceId = -1 } = {}) {
+    super();
+    this.sampleRate = sampleRate;
+    this.channels   = channels;
+    this.deviceId   = deviceId;
+    this._stream    = null;
+  }
 
-  const { EventEmitter } = require("events");
+  async start() {
+    if (this._stream) return; // already running
 
-  class MicCapture extends EventEmitter {
-    constructor({ sampleRate = 16000, channels = 1 } = {}) {
-      super();
-      this.sampleRate = sampleRate;
-      this.channels   = channels;
-      this._stream    = null;
-    }
+    try {
+      this._stream = portAudio.AudioIO({
+        inOptions: {
+          channelCount:   this.channels,
+          sampleFormat:   portAudio.SampleFormat16Bit,
+          sampleRate:     this.sampleRate,
+          deviceId:       this.deviceId,
+          closeOnError:   false,
+        },
+      });
 
-    async start() {
-      // TODO: replace stub with real naudiodon implementation
-      // const portAudio = require("naudiodon");
-      // this._stream = portAudio.AudioIO({
-      //   inOptions: {
-      //     channelCount: this.channels,
-      //     sampleFormat: portAudio.SampleFormat16Bit,
-      //     sampleRate: this.sampleRate,
-      //     deviceId: -1,  // -1 = default input device
-      //     closeOnError: false,
-      //   }
-      // });
-      // this._stream.on("data", (chunk) => this.emit("data", chunk));
-      // this._stream.start();
+      this._stream.on("data",  (chunk) => this.emit("data", chunk));
+      this._stream.on("error", (err)   => this.emit("error", err));
+      this._stream.start();
 
-      console.log("[MicCapture] STUB — real naudiodon capture goes here");
-    }
-
-    stop() {
-      this._stream?.quit();
+      const deviceName = this.deviceId === -1
+        ? "default"
+        : portAudio.getDevices().find(d => d.id === this.deviceId)?.name ?? `id=${this.deviceId}`;
+      console.log(`[MicCapture] started — device: ${deviceName}`);
+    } catch (err) {
       this._stream = null;
+      this.emit("error", err);
     }
   }
 
-  module.exports = { MicCapture };
-  
+  stop() {
+    if (!this._stream) return;
+    this._stream.quit();
+    this._stream = null;
+    console.log("[MicCapture] stopped");
+  }
+}
+
+module.exports = { MicCapture };
