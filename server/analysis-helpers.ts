@@ -249,30 +249,28 @@ export async function persistSessionUpdates(
   formattedTranscript: string,
   transcriptText: string
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    const [currentSession] = await tx
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, sessionId));
+  const [currentSession] = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.id, sessionId));
 
-    if (!currentSession) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
+  if (!currentSession) {
+    throw new Error(`Session ${sessionId} not found`);
+  }
 
-    const existingTranscript = currentSession.transcript || "";
-    const rawChunk = existingTranscript.endsWith(transcriptText)
-      ? existingTranscript.slice(0, existingTranscript.length - transcriptText.length)
-      : (existingTranscript ? existingTranscript + "\n\n" : "");
-    const updatedTranscript = rawChunk.trimEnd()
-      ? rawChunk.trimEnd() + "\n\n" + formattedTranscript
-      : formattedTranscript;
+  const existingTranscript = currentSession.transcript || "";
+  const rawChunk = existingTranscript.endsWith(transcriptText)
+    ? existingTranscript.slice(0, existingTranscript.length - transcriptText.length)
+    : (existingTranscript ? existingTranscript + "\n\n" : "");
+  const updatedTranscript = rawChunk.trimEnd()
+    ? rawChunk.trimEnd() + "\n\n" + formattedTranscript
+    : formattedTranscript;
 
-    await tx
-      .update(sessions)
-      .set({
-        ...updates,
-        transcript: updatedTranscript,
-      })
-      .where(eq(sessions.id, sessionId));
-  });
+  await db
+    .update(sessions)
+    .set({
+      ...updates,
+      transcript: updatedTranscript,
+    })
+    .where(eq(sessions.id, sessionId));
 }
