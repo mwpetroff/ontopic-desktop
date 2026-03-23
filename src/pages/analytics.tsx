@@ -117,6 +117,25 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
   );
 }
 
+// ---- query error helper -----------------------------------------------------
+
+function QueryError({ error, height = 64 }: { error: Error; height?: number }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-1.5 rounded-md border border-destructive/20 bg-destructive/5 text-center px-4"
+      style={{ height }}
+    >
+      <AlertCircle className="h-4 w-4 text-destructive/70 shrink-0" />
+      <p className="text-xs font-medium text-destructive/80">Failed to load data</p>
+      <p className="text-[11px] text-muted-foreground max-w-xs">
+        {error.message.startsWith("500")
+          ? "The server returned an error. Try restarting the app or check the server logs."
+          : error.message}
+      </p>
+    </div>
+  );
+}
+
 // ---- main page --------------------------------------------------------------
 
 export default function AnalyticsPage() {
@@ -138,17 +157,17 @@ export default function AnalyticsPage() {
     return r.json();
   };
 
-  const { data: freqData, isLoading: freqLoading } = useQuery<TopicFrequency[]>({
+  const { data: freqData, isLoading: freqLoading, error: freqError } = useQuery<TopicFrequency[]>({
     queryKey: ["/api/analytics/topic-frequency", dateRange, industry],
     queryFn: () => fetchJson(`/api/analytics/topic-frequency${qs}&limit=20`),
   });
 
-  const { data: trendsData, isLoading: trendsLoading } = useQuery<TopicTrendRow[]>({
+  const { data: trendsData, isLoading: trendsLoading, error: trendsError } = useQuery<TopicTrendRow[]>({
     queryKey: ["/api/analytics/topic-trends", dateRange],
     queryFn: () => fetchJson(`/api/analytics/topic-trends${qs2}`),
   });
 
-  const { data: nvo, isLoading: nvoLoading } = useQuery<NeedsVsOfferings>({
+  const { data: nvo, isLoading: nvoLoading, error: nvoError } = useQuery<NeedsVsOfferings>({
     queryKey: ["/api/analytics/needs-vs-offerings"],
   });
 
@@ -257,8 +276,10 @@ export default function AnalyticsPage() {
             <CardContent>
               {freqLoading ? (
                 <Skeleton className="h-64 w-full" />
+              ) : freqError ? (
+                <QueryError error={freqError as Error} height={256} />
               ) : !freqData?.length ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">No data</div>
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">No data for this period</div>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={freqData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
@@ -302,8 +323,10 @@ export default function AnalyticsPage() {
             <CardContent>
               {trendsLoading ? (
                 <Skeleton className="h-64 w-full" />
+              ) : trendsError ? (
+                <QueryError error={trendsError as Error} height={256} />
               ) : !pivotedTrends.length ? (
-                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">No data</div>
+                <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">No data for this period</div>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={pivotedTrends} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
@@ -342,6 +365,8 @@ export default function AnalyticsPage() {
           <CardContent>
             {nvoLoading ? (
               <Skeleton className="h-48 w-full" />
+            ) : nvoError ? (
+              <QueryError error={nvoError as Error} height={192} />
             ) : (
               <Tabs defaultValue="gaps">
                 <TabsList className="h-7 text-xs mb-3">
@@ -485,6 +510,8 @@ export default function AnalyticsPage() {
           <CardContent>
             {nvoLoading ? (
               <Skeleton className="h-64 w-full" />
+            ) : nvoError ? (
+              <QueryError error={nvoError as Error} height={192} />
             ) : !gapScatterData.length ? (
               <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
                 No offering gaps detected
