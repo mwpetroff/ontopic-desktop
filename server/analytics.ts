@@ -245,8 +245,9 @@ export async function getTopicTrends(options?: {
   from?: Date;
   to?: Date;
 }): Promise<TopicTrendRow[]> {
-  // SQLite week-start: subtract ((weekday + 6) % 7) days to land on Monday
-  const weekStart = sql<string>`date(${sessions.createdAt}, '-' || ((CAST(strftime('%w', ${sessions.createdAt}) AS INTEGER) + 6) % 7) || ' days')`;
+  // SQLite week-start: created_at is a Unix epoch integer, so pass 'unixepoch'.
+  // Subtract ((weekday+6)%7) days so the result is always the Monday of the week.
+  const weekStart = sql<string>`date(${sessions.createdAt}, 'unixepoch', '-' || ((CAST(strftime('%w', ${sessions.createdAt}, 'unixepoch') AS INTEGER) + 6) % 7) || ' days')`;
 
   const result = await db
     .select({
@@ -299,7 +300,7 @@ export async function getGapAnalysis(): Promise<GapMatch[]> {
       category: topics.category,
       totalMentions: sql<number>`CAST(SUM(${topics.mentionCount}) AS INTEGER)`,
       sessionCount: sql<number>`CAST(COUNT(DISTINCT ${topics.sessionId}) AS INTEGER)`,
-      lastSeen: sql<string>`CAST(MAX(${topics.firstMentionedAt}) AS TEXT)`,
+      lastSeen: sql<string>`date(MAX(${topics.firstMentionedAt}), 'unixepoch')`,
     })
     .from(topics)
     .where(eq(topics.capabilitySource, "unknown"))

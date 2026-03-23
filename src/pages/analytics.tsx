@@ -132,14 +132,20 @@ export default function AnalyticsPage() {
   const qs = params.toString() ? `?${params.toString()}` : "";
   const qs2 = from ? `?from=${from}${to ? `&to=${to}` : ""}` : "";
 
+  const fetchJson = async (url: string) => {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
+    return r.json();
+  };
+
   const { data: freqData, isLoading: freqLoading } = useQuery<TopicFrequency[]>({
     queryKey: ["/api/analytics/topic-frequency", dateRange, industry],
-    queryFn: () => fetch(`/api/analytics/topic-frequency${qs}&limit=20`).then((r) => r.json()),
+    queryFn: () => fetchJson(`/api/analytics/topic-frequency${qs}&limit=20`),
   });
 
   const { data: trendsData, isLoading: trendsLoading } = useQuery<TopicTrendRow[]>({
     queryKey: ["/api/analytics/topic-trends", dateRange],
-    queryFn: () => fetch(`/api/analytics/topic-trends${qs2}`).then((r) => r.json()),
+    queryFn: () => fetchJson(`/api/analytics/topic-trends${qs2}`),
   });
 
   const { data: nvo, isLoading: nvoLoading } = useQuery<NeedsVsOfferings>({
