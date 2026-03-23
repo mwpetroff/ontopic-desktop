@@ -47,6 +47,7 @@
     const apiKey = s.get("openaiApiKey") || "";
 
     const serverScript = path.join(__dirname, "../server/index.ts");
+    // Use shell:true so Windows resolves .bin/tsx via tsx.cmd automatically.
     const tsxBin = path.join(__dirname, "../node_modules/.bin/tsx");
 
     serverProcess = spawn(tsxBin, [serverScript], {
@@ -58,6 +59,7 @@
         OPENAI_API_KEY: apiKey,
       },
       stdio: "inherit",
+      shell: true,
     });
 
     serverProcess.on("error", (err) => {
