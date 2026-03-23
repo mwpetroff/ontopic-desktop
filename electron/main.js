@@ -41,11 +41,40 @@
   let isCapturing = false;
   let serverProcess = null;
 
+  // ─── Config file loading ──────────────────────────────────────────────────────
+  // Reads OPENAI_API_KEY (and any other vars) from a .env file.
+  // Looks in the project root first (dev), then %APPDATA%/OnTopic/ (prod).
+
+  function loadEnvFile() {
+    const { config: dotenvConfig } = require("dotenv");
+    const appData =
+      process.env.APPDATA ||
+      (process.platform === "darwin"
+        ? path.join(process.env.HOME, "Library", "Application Support")
+        : path.join(process.env.HOME, ".local", "share"));
+
+    const candidates = [
+      path.resolve(__dirname, "../.env"),                      // project root (dev)
+      path.join(appData, "OnTopic", ".env"),                   // user data dir (prod)
+    ];
+
+    for (const envPath of candidates) {
+      const result = dotenvConfig({ path: envPath, override: false });
+      if (!result.error) {
+        console.log(`[main] Loaded config from ${envPath}`);
+        return;
+      }
+    }
+  }
+
+  loadEnvFile();
+
   // ─── Express Backend ──────────────────────────────────────────────────────────
 
   async function startServer() {
+    // API key: .env file takes priority; electron-store is a legacy fallback.
     const s = await getStore();
-    const apiKey = s.get("openaiApiKey") || "";
+    const apiKey = process.env.OPENAI_API_KEY || s.get("openaiApiKey") || "";
 
     const serverScript = path.resolve(__dirname, "../server/index.ts");
     // On Windows child_process.spawn cannot execute bash wrapper scripts directly;
