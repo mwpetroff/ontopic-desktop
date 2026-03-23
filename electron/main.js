@@ -11,6 +11,7 @@
 
   const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
   const path = require("path");
+  const net  = require("net");
   const { spawn } = require("child_process");
   const portAudio = require("naudiodon");
   const { MicCapture } = require("./audio/mic-capture");
@@ -46,9 +47,11 @@
     const s = await getStore();
     const apiKey = s.get("openaiApiKey") || "";
 
-    const serverScript = path.join(__dirname, "../server/index.ts");
-    // Use shell:true so Windows resolves .bin/tsx via tsx.cmd automatically.
-    const tsxBin = path.join(__dirname, "../node_modules/.bin/tsx");
+    const serverScript = path.resolve(__dirname, "../server/index.ts");
+    // On Windows child_process.spawn cannot execute bash wrapper scripts directly;
+    // use tsx.cmd instead and avoid shell:true (which adds cmd.exe quoting complexity).
+    const tsxExt    = process.platform === "win32" ? ".cmd" : "";
+    const tsxBin    = path.resolve(__dirname, `../node_modules/.bin/tsx${tsxExt}`);
 
     serverProcess = spawn(tsxBin, [serverScript], {
       env: {
@@ -59,7 +62,6 @@
         OPENAI_API_KEY: apiKey,
       },
       stdio: "inherit",
-      shell: true,
     });
 
     serverProcess.on("error", (err) => {
@@ -220,12 +222,40 @@
     return inputs;
   });
 
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Resolves once TCP port is accepting connections, or rejects after timeoutMs.
+   */
+  function waitForPort(port, { timeoutMs = 15000, intervalMs = 200 } = {}) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs;
+      (function attempt() {
+        const sock = net.connect({ port, host: "127.0.0.1" });
+        sock.once("connect", () => { sock.destroy(); resolve(); });
+        sock.once("error",   () => {
+          sock.destroy();
+          if (Date.now() >= deadline) {
+            reject(new Error(`Port ${port} not ready after ${timeoutMs}ms`));
+          } else {
+            setTimeout(attempt, intervalMs);
+          }
+        });
+      })();
+    });
+  }
+
   // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
-  app.whenReady().then(() => {
-    startServer();
-    createWindow();
+  app.whenReady().then(async () => {
+    await startServer();
     createTray();
+    try {
+      await waitForPort(3000);
+    } catch (err) {
+      console.error("[main] Server did not start in time:", err.message);
+    }
+    createWindow();
   });
 
   app.on("window-all-closed", () => {
