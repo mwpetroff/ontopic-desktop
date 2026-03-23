@@ -479,8 +479,9 @@ export async function registerRoutes(
       res.json(result);
 
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
       console.error("Error in demo analysis:", error);
-      res.status(500).json({ error: "Failed to analyze demo text" });
+      res.status(500).json({ error: "Failed to analyze demo text", detail: msg });
     }
   });
 

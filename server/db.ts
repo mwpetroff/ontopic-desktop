@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
 import fs from "fs";
 import * as schema from "@shared/schema";
@@ -27,3 +28,15 @@ sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });
+
+// Apply any pending migrations (creates tables on first launch, no-op if already up-to-date).
+const migrationsFolder = path.resolve(__dirname, "../drizzle");
+try {
+  migrate(db, { migrationsFolder });
+  console.log("[db] Migrations applied.");
+} catch (err: any) {
+  // Tables already exist (db was initialised via drizzle-kit push) — safe to ignore.
+  if (!err?.message?.includes("already exists")) {
+    console.error("[db] Migration error:", err?.message ?? err);
+  }
+}
