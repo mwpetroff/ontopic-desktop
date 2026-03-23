@@ -101,7 +101,9 @@ export function MicTestWidget() {
       setPermissionNeeded(false);
       setError(null);
 
-      setSelectedId((prev) => prev || mapped[0]?.deviceId || "");
+      // Prefer first device with a non-empty deviceId (avoids Radix Select crash)
+      const firstValid = mapped.find((d) => d.deviceId)?.deviceId ?? "";
+      setSelectedId((prev) => prev || firstValid);
     } catch {
       setError("Microphone access was denied. Grant permission to test your mic.");
       setPermissionNeeded(true);
@@ -110,10 +112,11 @@ export function MicTestWidget() {
 
   useEffect(() => {
     enumerateDevices(false);
+    if (!navigator.mediaDevices) return stopTest;
     const onChange = () => enumerateDevices(false);
     navigator.mediaDevices.addEventListener("devicechange", onChange);
     return () => {
-      navigator.mediaDevices.removeEventListener("devicechange", onChange);
+      navigator.mediaDevices?.removeEventListener("devicechange", onChange);
       stopTest();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,7 +217,7 @@ export function MicTestWidget() {
               <SelectValue placeholder={devices.length === 0 ? "No microphones found" : "Select microphone\u2026"} />
             </SelectTrigger>
             <SelectContent>
-              {devices.map((d) => (
+              {devices.filter((d) => d.deviceId).map((d) => (
                 <SelectItem key={d.deviceId} value={d.deviceId}>
                   {d.label}
                 </SelectItem>
