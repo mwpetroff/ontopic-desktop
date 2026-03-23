@@ -1,16 +1,17 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip,
   LineChart, Line, Legend, ScatterChart, Scatter, ZAxis,
   ResponsiveContainer, Cell,
 } from "recharts";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, BarChart2, Target, AlertCircle, CheckCircle, Building2, Users } from "lucide-react";
+import { TrendingUp, BarChart2, Target, AlertCircle, CheckCircle, Building2, Users, Copy, Check } from "lucide-react";
 
 // ---- colour helpers --------------------------------------------------------
 const CAP_COLORS: Record<string, string> = {
@@ -120,6 +121,14 @@ function StatCard({ icon: Icon, label, value, sub, color }: {
 // ---- query error helper -----------------------------------------------------
 
 function QueryError({ error, height = 64 }: { error: Error; height?: number }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(error.message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [error.message]);
+
   return (
     <div
       className="flex flex-col items-center justify-center gap-1.5 rounded-md border border-destructive/20 bg-destructive/5 text-center px-4"
@@ -132,6 +141,18 @@ function QueryError({ error, height = 64 }: { error: Error; height?: number }) {
           ? "The server returned an error. Try restarting the app or check the server logs."
           : error.message}
       </p>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+        onClick={copy}
+      >
+        {copied ? (
+          <><Check className="h-3 w-3 mr-1 text-emerald-500" />Copied</>
+        ) : (
+          <><Copy className="h-3 w-3 mr-1" />Copy error</>
+        )}
+      </Button>
     </div>
   );
 }
