@@ -18,7 +18,6 @@
  */
 
 const { EventEmitter } = require("events");
-const portAudio = require("naudiodon");
 
 // Device name fragments that identify a loopback/mix capture source on Windows.
 // Listed in priority order — first match wins.
@@ -33,8 +32,10 @@ const LOOPBACK_KEYWORDS = [
 /**
  * Find the best available loopback input device.
  * Returns the DeviceInfo object or null if none found.
+ *
+ * @param {object} [portAudio]  naudiodon instance; defaults to require("naudiodon").
  */
-function findLoopbackDevice() {
+function findLoopbackDevice(portAudio = require("naudiodon")) {
   const devices = portAudio.getDevices();
   for (const keyword of LOOPBACK_KEYWORDS) {
     const match = devices.find(
@@ -52,18 +53,21 @@ class WasapiLoopbackCapture extends EventEmitter {
    * @param {object} opts
    * @param {number} [opts.sampleRate=16000]
    * @param {number} [opts.channels=1]
+   * @param {object} [opts.portAudio]    naudiodon instance; defaults to require("naudiodon").
+   *                                     Pass a mock here in tests to avoid loading the native addon.
    */
-  constructor({ sampleRate = 16000, channels = 1 } = {}) {
+  constructor({ sampleRate = 16000, channels = 1, portAudio = require("naudiodon") } = {}) {
     super();
-    this.sampleRate = sampleRate;
-    this.channels   = channels;
-    this._stream    = null;
+    this.sampleRate  = sampleRate;
+    this.channels    = channels;
+    this._portAudio  = portAudio;
+    this._stream     = null;
   }
 
   async start() {
     if (this._stream) return;
 
-    const device = findLoopbackDevice();
+    const device = findLoopbackDevice(this._portAudio);
     if (!device) {
       this.emit(
         "error",
@@ -81,11 +85,11 @@ class WasapiLoopbackCapture extends EventEmitter {
     }
 
     try {
-      this._stream = portAudio.AudioIO({
+      this._stream = this._portAudio.AudioIO({
         inOptions: {
           // Cap channels to what the device supports
           channelCount: Math.min(this.channels, device.maxInputChannels),
-          sampleFormat: portAudio.SampleFormat16Bit,
+          sampleFormat: this._portAudio.SampleFormat16Bit,
           sampleRate:   this.sampleRate,
           deviceId:     device.id,
           closeOnError: false,

@@ -10,31 +10,33 @@
  */
 
 const { EventEmitter } = require("events");
-const portAudio = require("naudiodon");
 
 class MicCapture extends EventEmitter {
   /**
    * @param {object} opts
    * @param {number} [opts.sampleRate=16000]
    * @param {number} [opts.channels=1]
-   * @param {number} [opts.deviceId=-1]  -1 = system default input device
+   * @param {number} [opts.deviceId=-1]   -1 = system default input device
+   * @param {object} [opts.portAudio]     naudiodon instance; defaults to require("naudiodon").
+   *                                      Pass a mock here in tests to avoid loading the native addon.
    */
-  constructor({ sampleRate = 16000, channels = 1, deviceId = -1 } = {}) {
+  constructor({ sampleRate = 16000, channels = 1, deviceId = -1, portAudio = require("naudiodon") } = {}) {
     super();
-    this.sampleRate = sampleRate;
-    this.channels   = channels;
-    this.deviceId   = deviceId;
-    this._stream    = null;
+    this.sampleRate  = sampleRate;
+    this.channels    = channels;
+    this.deviceId    = deviceId;
+    this._portAudio  = portAudio;
+    this._stream     = null;
   }
 
   async start() {
     if (this._stream) return; // already running
 
     try {
-      this._stream = portAudio.AudioIO({
+      this._stream = this._portAudio.AudioIO({
         inOptions: {
           channelCount:   this.channels,
-          sampleFormat:   portAudio.SampleFormat16Bit,
+          sampleFormat:   this._portAudio.SampleFormat16Bit,
           sampleRate:     this.sampleRate,
           deviceId:       this.deviceId,
           closeOnError:   false,
@@ -47,7 +49,7 @@ class MicCapture extends EventEmitter {
 
       const deviceName = this.deviceId === -1
         ? "default"
-        : portAudio.getDevices().find(d => d.id === this.deviceId)?.name ?? `id=${this.deviceId}`;
+        : this._portAudio.getDevices().find(d => d.id === this.deviceId)?.name ?? `id=${this.deviceId}`;
       console.log(`[MicCapture] started — device: ${deviceName}`);
     } catch (err) {
       this._stream = null;
