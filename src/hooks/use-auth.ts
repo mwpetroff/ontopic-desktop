@@ -26,8 +26,9 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery<User | null>({
     queryKey: ["/api/auth/user"],
     queryFn: fetchUser,
-    retry: false,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    // Inherit retry:2 from queryClient defaults so a transient ECONNREFUSED
+    // during Electron startup doesn't permanently block the authenticated app.
   });
 
   const logoutMutation = useMutation({
