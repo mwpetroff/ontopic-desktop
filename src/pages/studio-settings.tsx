@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key } from "lucide-react";
+import { MicTestWidget } from "@/components/mic-test-widget";
 
 declare global {
   interface Window {
@@ -420,6 +421,17 @@ export default function StudioSettings() {
               )}
             </div>
           )}
+
+          <div className="border-t border-border pt-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Mic className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Microphone</h2>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Select and test your microphone before starting a session. Speak normally — the meter should respond as you talk.
+            </p>
+            <MicTestWidget />
+          </div>
 
           <div className="border-t border-border pt-4">
             <h2 className="text-sm font-semibold mb-1">How Roles Work</h2>
