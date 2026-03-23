@@ -182,8 +182,8 @@ export async function getTopicFrequency(options?: {
       term: topics.term,
       category: topics.category,
       capabilitySource: topics.capabilitySource,
-      totalMentions: sql<number>`SUM(${topics.mentionCount})::int`,
-      sessionCount: sql<number>`COUNT(DISTINCT ${topics.sessionId})::int`,
+      totalMentions: sql<number>`CAST(SUM(${topics.mentionCount}) AS INTEGER)`,
+      sessionCount: sql<number>`CAST(COUNT(DISTINCT ${topics.sessionId}) AS INTEGER)`,
     })
     .from(topics)
     .innerJoin(sessions, eq(topics.sessionId, sessions.id))
@@ -245,11 +245,14 @@ export async function getTopicTrends(options?: {
   from?: Date;
   to?: Date;
 }): Promise<TopicTrendRow[]> {
+  // SQLite week-start: subtract ((weekday + 6) % 7) days to land on Monday
+  const weekStart = sql<string>`date(${sessions.createdAt}, '-' || ((CAST(strftime('%w', ${sessions.createdAt}) AS INTEGER) + 6) % 7) || ' days')`;
+
   const result = await db
     .select({
-      week: sql<string>`DATE_TRUNC('week', ${sessions.createdAt})::text`,
+      week: weekStart,
       category: topics.category,
-      totalMentions: sql<number>`SUM(${topics.mentionCount})::int`,
+      totalMentions: sql<number>`CAST(SUM(${topics.mentionCount}) AS INTEGER)`,
     })
     .from(topics)
     .innerJoin(sessions, eq(topics.sessionId, sessions.id))
@@ -259,8 +262,8 @@ export async function getTopicTrends(options?: {
         options?.to ? lt(sessions.createdAt, options.to) : undefined
       )
     )
-    .groupBy(sql`DATE_TRUNC('week', ${sessions.createdAt})`, topics.category)
-    .orderBy(sql`DATE_TRUNC('week', ${sessions.createdAt}) ASC`);
+    .groupBy(weekStart, topics.category)
+    .orderBy(weekStart);
 
   return result.map((r) => ({
     week: r.week ? r.week.slice(0, 10) : "",
@@ -294,9 +297,9 @@ export async function getGapAnalysis(): Promise<GapMatch[]> {
     .select({
       term: topics.term,
       category: topics.category,
-      totalMentions: sql<number>`SUM(${topics.mentionCount})::int`,
-      sessionCount: sql<number>`COUNT(DISTINCT ${topics.sessionId})::int`,
-      lastSeen: sql<string>`MAX(${topics.firstMentionedAt})::text`,
+      totalMentions: sql<number>`CAST(SUM(${topics.mentionCount}) AS INTEGER)`,
+      sessionCount: sql<number>`CAST(COUNT(DISTINCT ${topics.sessionId}) AS INTEGER)`,
+      lastSeen: sql<string>`CAST(MAX(${topics.firstMentionedAt}) AS TEXT)`,
     })
     .from(topics)
     .where(eq(topics.capabilitySource, "unknown"))
@@ -385,8 +388,8 @@ export async function getNeedsVsOfferings(): Promise<NeedsVsOfferingsResult> {
       category: topics.category,
       capabilitySource: topics.capabilitySource,
       partnerName: topics.partnerName,
-      totalMentions: sql<number>`SUM(${topics.mentionCount})::int`,
-      sessionCount: sql<number>`COUNT(DISTINCT ${topics.sessionId})::int`,
+      totalMentions: sql<number>`CAST(SUM(${topics.mentionCount}) AS INTEGER)`,
+      sessionCount: sql<number>`CAST(COUNT(DISTINCT ${topics.sessionId}) AS INTEGER)`,
     })
     .from(topics)
     .where(and(sql`${topics.capabilitySource} != 'unknown'`))
