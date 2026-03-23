@@ -8,6 +8,11 @@
  * Speaker labels:
  *   "mic"     → local user (AE / consultant)
  *   "speaker" → remote participants (prospect / client)
+ *
+ * API surface intentionally matches the legacy browser hook so that
+ * dashboard.tsx requires no changes:
+ *   - useAudioCapture({ intervalMs?, deviceId?, onFrequencyData? })
+ *   - returns { startCapture(cb), stopCapture(), audioLevel, isCapturing, ... }
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,19 +40,70 @@ declare global {
   }
 }
 
+// ── WAV encoding ──────────────────────────────────────────────────────────────
+
+/**
+ * Wrap raw 16-bit little-endian PCM in a minimal WAV container.
+ * naudiodon emits signed 16-bit LE samples at the configured sampleRate.
+ */
+function pcmToWavBlob(pcm: ArrayBuffer, sampleRate = 16000, channels = 1): Blob {
+  const bitsPerSample = 16;
+  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
+  const blockAlign = (channels * bitsPerSample) / 8;
+  const dataSize = pcm.byteLength;
+  const header = new ArrayBuffer(44);
+  const v = new DataView(header);
+
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(offset + i, s.charCodeAt(i));
+  };
+
+  writeStr(0,  "RIFF");
+  v.setUint32(4,  36 + dataSize, true);  // chunk size
+  writeStr(8,  "WAVE");
+  writeStr(12, "fmt ");
+  v.setUint32(16, 16, true);             // PCM sub-chunk size
+  v.setUint16(20, 1, true);              // PCM format
+  v.setUint16(22, channels, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, byteRate, true);
+  v.setUint16(32, blockAlign, true);
+  v.setUint16(34, bitsPerSample, true);
+  writeStr(36, "data");
+  v.setUint32(40, dataSize, true);
+
+  return new Blob([header, pcm], { type: "audio/wav" });
+}
+
+/**
+ * Compute RMS audio level from a 16-bit signed PCM buffer, normalised to [0, 1].
+ */
+function rmsLevel(pcm: ArrayBuffer): number {
+  const samples = new Int16Array(pcm);
+  if (samples.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += (samples[i] / 32768) ** 2;
+  return Math.sqrt(sum / samples.length);
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 interface UseAudioCaptureOptions {
-  onChunk:         (buffer: ArrayBuffer, label: "mic" | "speaker") => void;
-  onStatusChange?: (active: boolean) => void;
-  onError?:        (source: "mic" | "speaker", message: string) => void;
+  /** Ignored in Electron mode — chunk timing is controlled by the main process. */
+  intervalMs?: number;
+  deviceId?: number;
+  onFrequencyData?: (data: Float32Array) => void;
 }
 
-export function useAudioCapture({ onChunk, onStatusChange, onError }: UseAudioCaptureOptions) {
+export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOptions = {}) {
   const [isCapturing, setIsCapturing] = useState(false);
+  const [audioLevel, setAudioLevel]   = useState(0);
   const [platform, setPlatform]       = useState<string | null>(null);
   const [isElectron, setIsElectron]   = useState(false);
   const [devices, setDevices]         = useState<AudioDevice[]>([]);
+
+  // Callback stored by startCapture; called with a WAV Blob per PCM chunk.
+  const chunkCallbackRef = useRef<((blob: Blob) => void) | null>(null);
 
   const unsubChunkRef  = useRef<(() => void) | null>(null);
   const unsubStatusRef = useRef<(() => void) | null>(null);
@@ -55,59 +111,60 @@ export function useAudioCapture({ onChunk, onStatusChange, onError }: UseAudioCa
 
   useEffect(() => {
     const electron = window.electronAudio;
-    if (!electron) return; // Running in browser — audio capture not available
+    if (!electron) return; // Running in plain browser — no-op
 
     setIsElectron(true);
 
-    electron.getPlatform().then((p) => {
-      console.log("[useAudioCapture] platform:", p);
-      setPlatform(p);
-    });
+    electron.getPlatform().then((p) => setPlatform(p));
+    electron.listDevices().then((list) => setDevices(list));
 
-    electron.listDevices().then((list) => {
-      console.log("[useAudioCapture] devices:", list.map((d) => `${d.id}:${d.name}`).join(", "));
-      setDevices(list);
-    });
-
-    console.log("[useAudioCapture] subscribing to audio:chunk");
     unsubChunkRef.current = electron.onAudioChunk(({ buffer, label }) => {
-      console.log(`[useAudioCapture] chunk received — label=${label} bytes=${buffer.byteLength}`);
-      onChunk(buffer, label);
+      const level = rmsLevel(buffer);
+      setAudioLevel(level);
+
+      // Feed frequency visualizer if requested (synthesise a flat spectrum from RMS)
+      if (onFrequencyData) {
+        const fakeFreq = new Float32Array(128).fill(-100 + level * 100);
+        onFrequencyData(fakeFreq);
+      }
+
+      if (chunkCallbackRef.current) {
+        const blob = pcmToWavBlob(buffer, 16000, 1);
+        chunkCallbackRef.current(blob);
+      }
     });
 
     unsubStatusRef.current = electron.onCaptureStatus(({ active }) => {
-      console.log("[useAudioCapture] capture status:", active);
       setIsCapturing(active);
-      onStatusChange?.(active);
+      if (!active) setAudioLevel(0);
     });
 
     unsubErrorRef.current = electron.onCaptureError(({ source, message }) => {
       console.error(`[useAudioCapture] capture error [${source}]:`, message);
-      onError?.(source, message);
     });
 
-    electron.getStatus().then(({ active }) => {
-      console.log("[useAudioCapture] initial status:", active);
-      setIsCapturing(active);
-    });
+    electron.getStatus().then(({ active }) => setIsCapturing(active));
 
     return () => {
       unsubChunkRef.current?.();
       unsubStatusRef.current?.();
       unsubErrorRef.current?.();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const start = useCallback(async (micDeviceId?: number) => {
-    if (!window.electronAudio) return;
+  const startCapture = useCallback(async (callback: (blob: Blob) => void) => {
+    if (!window.electronAudio) throw new Error("Electron audio not available");
+    chunkCallbackRef.current = callback;
     await window.electronAudio.startCapture(
-      micDeviceId !== undefined ? { micDeviceId } : undefined
+      deviceId !== undefined ? { micDeviceId: deviceId } : undefined
     );
-  }, []);
+  }, [deviceId]);
 
-  const stop = useCallback(async () => {
-    if (!window.electronAudio) return;
-    await window.electronAudio.stopCapture();
+  const stopCapture = useCallback(async () => {
+    chunkCallbackRef.current = null;
+    setAudioLevel(0);
+    await window.electronAudio?.stopCapture();
   }, []);
 
   const refreshDevices = useCallback(async () => {
@@ -116,5 +173,5 @@ export function useAudioCapture({ onChunk, onStatusChange, onError }: UseAudioCa
     setDevices(list);
   }, []);
 
-  return { isCapturing, start, stop, platform, isElectron, devices, refreshDevices };
+  return { isCapturing, startCapture, stopCapture, audioLevel, platform, isElectron, devices, refreshDevices };
 }
