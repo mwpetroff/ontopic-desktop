@@ -82,6 +82,11 @@
     const tsxExt    = process.platform === "win32" ? ".cmd" : "";
     const tsxBin    = path.resolve(__dirname, `../node_modules/.bin/tsx${tsxExt}`);
 
+    const logPath = path.join(
+      process.env.APPDATA || path.join(process.env.HOME, ".local", "share"),
+      "OnTopic", "server.log"
+    );
+
     serverProcess = spawn(tsxBin, [serverScript], {
       env: {
         ...process.env,
@@ -89,9 +94,18 @@
         PORT: "3000",
         ELECTRON: "true",
         OPENAI_API_KEY: apiKey,
+        SERVER_LOG_PATH: logPath,
       },
-      stdio: "inherit",
+      // Pipe output so we can also write to a log file.
+      stdio: ["ignore", "pipe", "pipe"],
     });
+
+    // Tee server output: forward to Electron console + write to log file.
+    const { createWriteStream } = require("fs");
+    const logStream = createWriteStream(logPath, { flags: "a" });
+    logStream.write(`\n\n=== Server started ${new Date().toISOString()} ===\n`);
+    serverProcess.stdout.on("data", (d) => { process.stdout.write(d); logStream.write(d); });
+    serverProcess.stderr.on("data", (d) => { process.stderr.write(d); logStream.write(d); });
 
     serverProcess.on("error", (err) => {
       console.error("[main] Failed to start server process:", err.message);
@@ -297,6 +311,15 @@
 
   app.on("before-quit", () => {
     stopCapture();
-    serverProcess?.kill();
+    if (serverProcess) {
+      // On Windows, killing a .cmd wrapper with .kill() doesn't reach the
+      // underlying Node process.  Use taskkill /T /F to kill the whole tree.
+      if (process.platform === "win32") {
+        require("child_process").spawnSync("taskkill", ["/pid", String(serverProcess.pid), "/t", "/f"]);
+      } else {
+        serverProcess.kill("SIGTERM");
+      }
+      serverProcess = null;
+    }
   });
   
