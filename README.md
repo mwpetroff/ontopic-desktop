@@ -55,12 +55,18 @@ npm run dev        # Starts Vite (port 5173) + Electron (which spawns Express on
 
 On first launch the app auto-creates `%APPDATA%\OnTopic\database.sqlite` and seeds it with sample data.
 
-Set your OpenAI API key in the app's Settings panel — it is stored via `electron-store` and passed to the Express server at startup.
+Copy `.env.example` to `.env` in the project root and fill in your OpenAI API key:
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+The key is read by `electron/main.js` before spawning the server, and also by the server directly via `dotenv/config` when running standalone (`npm run server`). It is never stored in the UI or committed to git.
 
 ## Testing
 
 ```bash
-npm test           # Run full test suite (vitest, 177 tests)
+npm test           # Run full test suite (vitest, 208 tests)
 npm run test:watch # Watch mode
 ```
 
@@ -68,14 +74,18 @@ Tests use an isolated temporary SQLite database and never touch the production d
 
 | Test file | What it covers |
 |---|---|
-| `analysis-helpers.test.ts` | Speaker resolution, sentiment aggregation, BANT merge, methodology stages |
+| `analysis-helpers.test.ts` | Speaker resolution, sentiment aggregation, BANT merge, methodology stages, `persistSessionUpdates` DB writes |
 | `analytics.test.ts` | Competency match scoring, topic similarity detection |
 | `schema.test.ts` | Drizzle-Zod insert schemas, field stripping, JSON array columns |
 | `storage.test.ts` | Full CRUD lifecycle for all entities against real SQLite |
 | `transcript.test.ts` | Block parsing, timestamp formatting, speaker accumulation |
 | `validation.test.ts` | Zod validation schemas for API request bodies |
 | `audio-mixer.test.ts` | PCM buffering, chunk sizing, label isolation, stop/flush |
+| `mic-capture.test.ts` | MicCapture lifecycle, mock portAudio, event emitters |
+| `speaker-capture-win.test.ts` | Windows loopback device lookup, error handling |
 | `auth-stub.test.ts` | Auth endpoints (login, logout, /api/auth/user) |
+
+> **After any `npm install`:** Run `npm test` to verify `better-sqlite3` wasn't accidentally rebuilt for Electron. If tests fail with a MODULE_VERSION error, run `npm rebuild better-sqlite3`.
 
 ## Build
 
@@ -115,3 +125,5 @@ npm run build:linux  # Linux AppImage
 ## Technical Plan
 
 See [docs/desktop-audio-capture-plan.md](docs/desktop-audio-capture-plan.md) for the full audio architecture.
+
+See [SETUP.md](SETUP.md) for the full dependency, configuration, and troubleshooting guide.
