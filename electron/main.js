@@ -17,6 +17,7 @@
   const { MicCapture } = require("./audio/mic-capture");
   const { SpeakerCapture } = require("./audio/speaker-capture");
   const { AudioMixer } = require("./audio/audio-mixer");
+  const { runSetupWizardIfNeeded } = require("./setup-wizard");
 
   const isDev = process.env.NODE_ENV === "development";
 
@@ -28,7 +29,8 @@
       const { default: Store } = await import("electron-store");
       store = new Store({
         schema: {
-          openaiApiKey: { type: "string", default: "" },
+          openaiApiKey:      { type: "string",  default: "" },
+          wizardCompleted:   { type: "boolean", default: false },
         },
       });
     }
@@ -77,17 +79,21 @@
     const apiKey = process.env.OPENAI_API_KEY || s.get("openaiApiKey") || "";
 
     const serverScript = path.resolve(__dirname, "../server/index.ts");
-    // On Windows child_process.spawn cannot execute bash wrapper scripts directly;
-    // use tsx.cmd instead and avoid shell:true (which adds cmd.exe quoting complexity).
-    const tsxExt    = process.platform === "win32" ? ".cmd" : "";
-    const tsxBin    = path.resolve(__dirname, `../node_modules/.bin/tsx${tsxExt}`);
+    const tsxBin = path.resolve(__dirname, "../node_modules/.bin/tsx");
+
+    // On Windows, Node.js 20+ blocks spawning .cmd files directly (security restriction).
+    // Use cmd.exe /c to invoke the .cmd wrapper explicitly instead.
+    const spawnCmd  = process.platform === "win32" ? "cmd.exe" : tsxBin;
+    const spawnArgs = process.platform === "win32"
+      ? ["/c", tsxBin + ".cmd", serverScript]
+      : [serverScript];
 
     const logPath = path.join(
       process.env.APPDATA || path.join(process.env.HOME, ".local", "share"),
       "OnTopic", "server.log"
     );
 
-    serverProcess = spawn(tsxBin, [serverScript], {
+    serverProcess = spawn(spawnCmd, spawnArgs, {
       env: {
         ...process.env,
         NODE_ENV: isDev ? "development" : "production",
@@ -151,8 +157,8 @@
   // ─── Tray ─────────────────────────────────────────────────────────────────────
 
   function createTray() {
-    // TODO: replace with actual icon asset
-    const icon = nativeImage.createEmpty();
+    const iconPath = path.join(__dirname, "assets/tray-icon.png");
+    const icon = nativeImage.createFromPath(iconPath);
     tray = new Tray(icon);
     const contextMenu = Menu.buildFromTemplate([
       { label: "Open OnTopic", click: () => mainWindow?.show() },
@@ -291,6 +297,7 @@
   // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
   app.whenReady().then(async () => {
+    const s = await getStore();
     await startServer();
     createTray();
     try {
@@ -299,6 +306,8 @@
       console.error("[main] Server did not start in time:", err.message);
     }
     createWindow();
+    // Run setup wizard on first launch (after window is created so dialogs have a parent).
+    await runSetupWizardIfNeeded(mainWindow, s);
   });
 
   app.on("window-all-closed", () => {

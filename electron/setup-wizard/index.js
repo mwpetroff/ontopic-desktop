@@ -24,13 +24,10 @@
   const os = require("os");
   const path = require("path");
 
-  async function runSetupWizardIfNeeded(mainWindow) {
+  async function runSetupWizardIfNeeded(mainWindow, store) {
     const platform = process.platform;
 
-    // TODO: persist wizard completion in app config (electron-store)
-    const wizardCompleted = false; // Replace with: store.get("wizardCompleted")
-
-    if (wizardCompleted) return;
+    if (store.get("wizardCompleted")) return;
 
     if (platform === "darwin") {
       await setupMac(mainWindow);
@@ -40,7 +37,7 @@
       await setupLinux(mainWindow);
     }
 
-    // store.set("wizardCompleted", true);
+    store.set("wizardCompleted", true);
   }
 
   async function setupMac(win) {
@@ -57,8 +54,9 @@
     });
 
     if (response === 0) {
-      // TODO: Bundle BlackHole installer and run:
-      // execSync("installer -pkg ./resources/BlackHole2ch.pkg -target /");
+      // Phase 4: Bundle BlackHole2ch.pkg in app resources and run:
+      //   execSync("installer -pkg " + path.join(process.resourcesPath, "BlackHole2ch.pkg") + " -target /");
+      // For now, open the installation guide in the browser.
       shell.openExternal("https://github.com/ExistentialAudio/BlackHole/wiki/Installation");
     }
   }

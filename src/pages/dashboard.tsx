@@ -468,9 +468,11 @@ export default function Dashboard() {
       await audioCapture.startCapture(sendAudioChunk);
       setIsListening(true);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[handleStartSession] failed:", msg, error);
       toast({
         title: "Failed to start session",
-        description: "Please make sure your microphone is accessible.",
+        description: msg.startsWith("500") ? "Server error — check the console for details." : msg,
         variant: "destructive",
       });
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { resolveSpeaker, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, mergeBantData, applyMethodologyStageUpdates } from "../server/analysis-helpers";
+import { resolveSpeaker, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, mergeBantData, applyMethodologyStageUpdates, persistSessionUpdates } from "../server/analysis-helpers";
+import { DatabaseStorage } from "../server/storage";
 import type { AnalysisResult } from "../server/services/analysis";
 import type { SentimentEntry, SpeakerEntry, ReferenceProject } from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
@@ -285,6 +286,79 @@ describe("mergeBantData", () => {
     expect(result?.authority?.value).toBe("CEO");
     expect(result?.needs?.value).toBe("Pipeline visibility");
     expect(result?.timeline?.value).toBe("Q3 2024");
+  });
+});
+
+// ─── persistSessionUpdates ────────────────────────────────────────────────────
+// This function writes to the real test DB (see tests/setup.ts).
+// Key regression: better-sqlite3 is synchronous — db.transaction(async cb) throws
+// "Transaction function cannot return a promise". These tests catch that immediately.
+
+describe("persistSessionUpdates", () => {
+  const storage = new DatabaseStorage();
+
+  async function makeSession() {
+    return storage.createSession({ title: "Persist Test", clientName: "Acme", industry: "tech" });
+  }
+
+  it("writes transcript to a fresh session", async () => {
+    const session = await makeSession();
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [] },
+      "Alice: Hello world.",
+      "Alice: Hello world."
+    );
+    const updated = await storage.getSession(session.id);
+    expect(updated?.transcript).toBe("Alice: Hello world.");
+  });
+
+  it("appends a second chunk without duplicating text", async () => {
+    const session = await makeSession();
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [] },
+      "Alice: Chunk one.",
+      "Alice: Chunk one."
+    );
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [] },
+      "Bob: Chunk two.",
+      "Bob: Chunk two."
+    );
+    const updated = await storage.getSession(session.id);
+    expect(updated?.transcript).toContain("Alice: Chunk one.");
+    expect(updated?.transcript).toContain("Bob: Chunk two.");
+    // Chunk one should not appear twice
+    expect(updated?.transcript?.split("Alice: Chunk one.").length).toBe(2);
+  });
+
+  it("persists sentiment data", async () => {
+    const session = await makeSession();
+    const sentimentData = [{ chunkIndex: 0, score: 75, label: "positive", speaker: "Alice" }];
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 1, sentimentData, overallSentiment: 75, speakers: [{ name: "Alice", role: "host" as const }] },
+      "Alice: Great meeting.",
+      "Alice: Great meeting."
+    );
+    const updated = await storage.getSession(session.id);
+    expect(updated?.overallSentiment).toBe(75);
+    expect(updated?.sentimentData).toHaveLength(1);
+    expect(updated?.speakers).toHaveLength(1);
+    expect(updated?.speakers[0].name).toBe("Alice");
+  });
+
+  it("throws for a non-existent session ID", async () => {
+    await expect(
+      persistSessionUpdates(
+        999999,
+        { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [] },
+        "Ghost text",
+        "Ghost text"
+      )
+    ).rejects.toThrow("Session 999999 not found");
   });
 });
 

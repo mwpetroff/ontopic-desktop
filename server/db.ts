@@ -35,8 +35,11 @@ try {
   migrate(db, { migrationsFolder });
   console.log("[db] Migrations applied.");
 } catch (err: any) {
-  // Tables already exist (db was initialised via drizzle-kit push) — safe to ignore.
-  if (!err?.message?.includes("already exists")) {
+  // "already exists" means the DB was initialised via drizzle-kit push (no __drizzle_migrations
+  // tracking table), so migrate() tries to re-create tables but they're already there.
+  // Drizzle wraps the underlying SQLite error, so check both the outer message and its cause.
+  const combined = `${err?.message ?? ""} ${err?.cause?.message ?? ""}`;
+  if (!combined.includes("already exists")) {
     console.error("[db] Migration error:", err?.message ?? err);
   }
 }
