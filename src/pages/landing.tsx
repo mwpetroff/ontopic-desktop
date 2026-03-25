@@ -2,9 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Headphones, Mic, BookOpen, Sparkles, Radio, Shield } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Landing() {
   const { theme } = useTheme();
+  const [, navigate] = useLocation();
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -16,9 +20,11 @@ export default function Landing() {
             </div>
             <span className="font-semibold text-sm tracking-tight">OnTopic</span>
           </div>
-          <Button asChild size="sm" data-testid="button-login">
-            <a href="/api/login">Sign In</a>
-          </Button>
+          {!isAuthenticated && (
+            <Button asChild size="sm" data-testid="button-login">
+              <a href="/api/login">Sign In</a>
+            </Button>
+          )}
         </div>
       </nav>
 
@@ -39,8 +45,8 @@ export default function Landing() {
             intelligent follow-up questions.
           </p>
 
-          <Button asChild size="lg" className="px-8 text-sm font-semibold shadow-md" data-testid="button-login-hero">
-            <a href="/api/login">Get Started</a>
+          <Button size="lg" className="px-8 text-sm font-semibold shadow-md" data-testid="button-login-hero" onClick={() => navigate("/")}>
+            Get Started
           </Button>
 
           <p className="text-[11px] text-muted-foreground mt-3 flex items-center justify-center gap-1.5">

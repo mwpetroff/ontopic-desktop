@@ -48,8 +48,14 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: 2,
-      retryDelay: 1000,
+      // Retry on 502/503/504 (Express not ready yet at startup) but not on 4xx
+      retry: (failureCount, error) => {
+        if (failureCount >= 3) return false;
+        const msg = error instanceof Error ? error.message : "";
+        const isGatewayError = /^50[234]:/.test(msg);
+        return isGatewayError;
+      },
+      retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 5000),
     },
     mutations: {
       retry: false,

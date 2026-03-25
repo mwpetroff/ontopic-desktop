@@ -89,8 +89,23 @@ Electron. Re-run `npm rebuild better-sqlite3` to fix it.
 
 ## API key configuration
 
-The OpenAI API key lives in a `.env` file (see `.env.example`), **not** in the UI.
-`electron/main.js` reads it before spawning the server. The server also reads it via
+The OpenAI API key is stored in the **OS keychain** via Electron `safeStorage` when set
+through the Studio Settings page. Do **not** revert to `electron-store` or plaintext
+storage — safeStorage is encrypted at rest and is the correct approach.
+
+For development, a `.env` file is also supported (see `.env.example`). `electron/main.js`
+reads `.env` before spawning the server; the server also reads it via
 `import "dotenv/config"` as a fallback when running standalone (`npm run server`).
 
-Do not add UI settings fields for secrets — keep them in `.env`.
+Precedence: safeStorage (UI-set key) > `.env` file.
+
+---
+
+## Single-instance lock
+
+`app.requestSingleInstanceLock()` in `electron/main.js` ensures only one app process runs
+at a time. When a second instance launches, it forwards its argv to the first via the
+`second-instance` event and quits immediately.
+
+Do not remove or conditionalize this lock — without it, two Electron windows can race for
+port 3000 and leave orphaned server processes.

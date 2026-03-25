@@ -36,6 +36,8 @@ declare global {
       onAudioChunk:    (cb: (data: { buffer: ArrayBuffer; label: "mic" | "speaker" }) => void) => () => void;
       onCaptureStatus: (cb: (data: { active: boolean }) => void) => () => void;
       onCaptureError:  (cb: (data: { source: "mic" | "speaker"; message: string }) => void) => () => void;
+      getApiKey:       () => Promise<string>;
+      setApiKey:       (key: string) => Promise<void>;
     };
   }
 }
@@ -95,12 +97,18 @@ interface UseAudioCaptureOptions {
   onFrequencyData?: (data: Float32Array) => void;
 }
 
+export interface CaptureError {
+  source: "mic" | "speaker";
+  message: string;
+}
+
 export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOptions = {}) {
   const [isCapturing, setIsCapturing] = useState(false);
   const [audioLevel, setAudioLevel]   = useState(0);
   const [platform, setPlatform]       = useState<string | null>(null);
   const [isElectron, setIsElectron]   = useState(false);
-  const [devices, setDevices]         = useState<AudioDevice[]>([]);
+  const [devices, setDevices]         = useState<AudioDevice[]>();
+  const [captureErrors, setCaptureErrors] = useState<CaptureError[]>([]);
 
   // Callback stored by startCapture; called with a WAV Blob per PCM chunk.
   const chunkCallbackRef = useRef<((blob: Blob) => void) | null>(null);
@@ -140,7 +148,12 @@ export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOp
     });
 
     unsubErrorRef.current = electron.onCaptureError(({ source, message }) => {
-      console.error(`[useAudioCapture] capture error [${source}]:`, message);
+      console.warn(`[useAudioCapture] capture warning [${source}]:`, message);
+      setCaptureErrors((prev) => {
+        // Deduplicate by source — only keep the latest error per source
+        const filtered = prev.filter((e) => e.source !== source);
+        return [...filtered, { source, message }];
+      });
     });
 
     electron.getStatus().then(({ active }) => setIsCapturing(active));
@@ -155,6 +168,7 @@ export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOp
 
   const startCapture = useCallback(async (callback: (blob: Blob) => void) => {
     if (!window.electronAudio) throw new Error("Electron audio not available");
+    setCaptureErrors([]);
     chunkCallbackRef.current = callback;
     await window.electronAudio.startCapture(
       deviceId !== undefined ? { micDeviceId: deviceId } : undefined
@@ -173,5 +187,9 @@ export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOp
     setDevices(list);
   }, []);
 
-  return { isCapturing, startCapture, stopCapture, audioLevel, platform, isElectron, devices, refreshDevices };
+  const dismissCaptureError = useCallback((source: "mic" | "speaker") => {
+    setCaptureErrors((prev) => prev.filter((e) => e.source !== source));
+  }, []);
+
+  return { isCapturing, startCapture, stopCapture, audioLevel, platform, isElectron, devices, refreshDevices, captureErrors, dismissCaptureError };
 }

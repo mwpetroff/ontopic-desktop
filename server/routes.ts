@@ -222,7 +222,7 @@ export async function registerRoutes(
 
   const updateSettingsSchema = z.object({
     hostRole: z.enum(["host", "producer", "engineer", "correspondent", "account-executive"]).optional(),
-    analysisModel: z.enum(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1-nano"]).optional(),
+    analysisModel: z.enum(["gpt-4o-mini", "gpt-4o", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4.1", "o3-mini", "o4-mini"]).optional(),
     transcriptionModel: z.enum(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]).optional(),
     caseStudyUrls: z.array(z.string().url()).optional(),
     salesMethodology: z.enum(["sandler", "meddic", "spin", "challenger"]).nullable().optional(),
@@ -238,7 +238,7 @@ export async function registerRoutes(
       res.json(s);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid settings data", details: error.errors });
+        return res.status(400).json({ error: "Invalid settings data", details: error.issues });
       }
       console.error("Error updating settings:", error);
       res.status(500).json({ error: "Failed to update settings" });
@@ -299,7 +299,7 @@ export async function registerRoutes(
       res.json(session);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid session data", details: error.errors });
+        return res.status(400).json({ error: "Invalid session data", details: error.issues });
       }
       console.error("Error updating session:", error);
       res.status(500).json({ error: "Failed to update session" });
@@ -312,7 +312,7 @@ export async function registerRoutes(
       const session = await storage.endSession(id);
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      if (session.transcript && session.transcript.length > 50) {
+      if (session.transcript && session.transcript.length > 200) {
         generateSummary(id, session.transcript).catch((err) =>
           console.error("Background summary generation failed:", err)
         );
@@ -330,7 +330,7 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       const session = await storage.getSession(id);
       if (!session) return res.status(404).json({ error: "Session not found" });
-      if (!session.transcript || session.transcript.length < 50) {
+      if (!session.transcript || session.transcript.length < 200) {
         return res.status(400).json({ error: "Not enough transcript to summarize" });
       }
       const summary = await generateSummary(id, session.transcript);
@@ -381,7 +381,7 @@ export async function registerRoutes(
       res.json(topic);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid topic data", details: error.errors });
+        return res.status(400).json({ error: "Invalid topic data", details: error.issues });
       }
       console.error("Error updating topic:", error);
       res.status(500).json({ error: "Failed to update topic" });
@@ -395,6 +395,10 @@ export async function registerRoutes(
 
       if (!audio) {
         return res.status(400).json({ error: "Audio data is required" });
+      }
+
+      if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "not-configured") {
+        return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Studio Settings." });
       }
 
       const session = await storage.getSession(sessionId);
@@ -449,7 +453,12 @@ export async function registerRoutes(
 
     } catch (error) {
       console.error("Error analyzing audio:", error);
-      res.status(500).json({ error: "Failed to analyze audio" });
+      const msg = error instanceof Error ? error.message : String(error);
+      const isAuthError = msg.includes("401") || msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("authentication") || msg.toLowerCase().includes("incorrect api key");
+      if (isAuthError) {
+        return res.status(401).json({ error: "OpenAI API key is missing or invalid. Set OPENAI_API_KEY in your .env file or via Studio Settings.", detail: msg });
+      }
+      res.status(500).json({ error: "Failed to analyze audio", detail: msg });
     }
   });
 
@@ -460,6 +469,10 @@ export async function registerRoutes(
 
       if (!text) {
         return res.status(400).json({ error: "Text is required" });
+      }
+
+      if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "not-configured") {
+        return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Studio Settings." });
       }
 
       const features: FeatureFlags = {
@@ -532,7 +545,7 @@ export async function registerRoutes(
       res.json(profile);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid voice profile data", details: error.errors });
+        return res.status(400).json({ error: "Invalid voice profile data", details: error.issues });
       }
       console.error("Error updating voice profile:", error);
       res.status(500).json({ error: "Failed to update voice profile" });
@@ -610,7 +623,7 @@ export async function registerRoutes(
       res.json(partner);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid partner data", details: error.errors });
+        return res.status(400).json({ error: "Invalid partner data", details: error.issues });
       }
       console.error("Error updating partner:", error);
       res.status(500).json({ error: "Failed to update partner" });
@@ -664,7 +677,7 @@ export async function registerRoutes(
       res.status(201).json(competency);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid competency data", details: error.errors });
+        return res.status(400).json({ error: "Invalid competency data", details: error.issues });
       }
       console.error("Error creating competency:", error);
       res.status(500).json({ error: "Failed to create competency" });
@@ -688,7 +701,7 @@ export async function registerRoutes(
       res.json(competency);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid competency data", details: error.errors });
+        return res.status(400).json({ error: "Invalid competency data", details: error.issues });
       }
       console.error("Error updating competency:", error);
       res.status(500).json({ error: "Failed to update competency" });
@@ -922,7 +935,7 @@ Be specific and practical. Extract 5-20 items. Focus on technology and IT-relate
       res.status(201).json(project);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid project data", details: error.errors });
+        return res.status(400).json({ error: "Invalid project data", details: error.issues });
       }
       console.error("Error creating reference project:", error);
       res.status(500).json({ error: "Failed to create reference project" });
@@ -952,7 +965,7 @@ Be specific and practical. Extract 5-20 items. Focus on technology and IT-relate
       res.json(project);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid project data", details: error.errors });
+        return res.status(400).json({ error: "Invalid project data", details: error.issues });
       }
       console.error("Error updating reference project:", error);
       res.status(500).json({ error: "Failed to update reference project" });

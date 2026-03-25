@@ -76,6 +76,26 @@ describe("findLoopbackDevice", () => {
     mockDevices.push({ id: 11, name: "Stereo Mix",  maxInputChannels: 2 });
     expect(findLoopbackDevice(mockPortAudio)?.id).toBe(11);
   });
+
+  it("finds a VB-Audio Cable device by 'cable output'", () => {
+    mockDevices.push({ id: 8, name: "CABLE Output (VB-Audio Virtual Cable)", maxInputChannels: 2 });
+    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(8);
+  });
+
+  it("finds a VoiceMeeter Output device", () => {
+    mockDevices.push({ id: 9, name: "VoiceMeeter Output (VB-Audio VoiceMeeter VAIO)", maxInputChannels: 2 });
+    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(9);
+  });
+
+  it("finds a VoiceMeeter VAIO device", () => {
+    mockDevices.push({ id: 13, name: "VoiceMeeter VAIO3 Output (VB-Audio VoiceMeeter VAIO3)", maxInputChannels: 2 });
+    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(13);
+  });
+
+  it("finds a generic device with 'loopback' in its name", () => {
+    mockDevices.push({ id: 12, name: "Loopback Audio Device", maxInputChannels: 2 });
+    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(12);
+  });
 });
 
 // ── WasapiLoopbackCapture ─────────────────────────────────────────────────────
@@ -88,7 +108,7 @@ describe("WasapiLoopbackCapture", () => {
     await cap.start();
 
     expect(onError).toHaveBeenCalledOnce();
-    expect(onError.mock.calls[0][0].message).toMatch(/stereo mix/i);
+    expect(onError.mock.calls[0][0].message).toMatch(/No loopback capture device found/i);
     expect(mockPortAudio.AudioIO).not.toHaveBeenCalled();
   });
 

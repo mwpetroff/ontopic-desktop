@@ -44,7 +44,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-2 border-b border-sidebar-border group-data-[collapsible=icon]:p-1.5">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <Link href="/welcome" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
             <Headphones className="h-4 w-4 text-primary-foreground" />
           </div>
@@ -52,7 +52,7 @@ export function AppSidebar() {
             <h2 className="text-sm font-semibold text-sidebar-foreground tracking-tight">OnTopic</h2>
             <p className="text-[10px] text-muted-foreground">PreSales Consulting Companion</p>
           </div>
-        </div>
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>

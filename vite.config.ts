@@ -12,6 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       // Proxy API calls to the Express backend during development.
       // Point VITE_API_URL at a running backend (local or Replit deployment).

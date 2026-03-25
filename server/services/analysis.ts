@@ -210,7 +210,7 @@ export async function analyzeText(
           },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 1024,
+        max_completion_tokens: 2048,
       });
 
       const analysisText = analysisResponse.choices[0]?.message?.content || "{}";
@@ -242,24 +242,32 @@ export async function generateSummary(sessionId: number, transcript: string): Pr
         messages: [
           {
             role: "system",
-            content: `You are a meeting summarizer for a PreSales consulting companion app called OnTopic. Write a concise, insightful summary (3-5 paragraphs) of the meeting transcript below. The tone should be professional but approachable — like podcast show notes.
+            content: `You are a meeting summarizer for a PreSales consulting companion app called OnTopic. Summarize ONLY what is explicitly stated in the transcript provided. Do NOT invent, infer, or extrapolate any information that is not directly present in the text.
+
+CRITICAL RULES:
+- If the transcript is too short or lacks substantive content, respond with exactly: "This session did not contain enough content to generate meaningful show notes."
+- Never fabricate topics, decisions, people, technologies, or outcomes that are not mentioned in the transcript.
+- Only include information that is clearly evidenced by the actual words in the transcript.
+- If a topic is only partially discussed, note it briefly and accurately — do not expand it.
+
+When there IS sufficient content, write a concise summary (3-5 paragraphs) in the style of professional podcast show notes.
 
 You are writing this summary for a ${roleLabel}. ${HOST_ROLE_SUMMARY_FOCUS[hostRole] || HOST_ROLE_SUMMARY_FOCUS.host}
 
-Focus on:
-- The main topics and themes discussed
-- Key decisions or directions agreed upon
-- Notable concerns or challenges raised
-- Technical recommendations or solutions proposed
+Focus only on what was actually discussed:
+- The main topics and themes that were explicitly mentioned
+- Key decisions or directions that were clearly stated
+- Notable concerns or challenges that were raised
+- Technical recommendations or solutions that were proposed
 
-${topicList ? `Key terms detected: ${topicList}` : ""}
-${industry ? `Client industry: ${industry}. Include relevant industry context in the summary.` : ""}
+${topicList ? `Key terms detected in this session: ${topicList}` : ""}
+${industry ? `Client industry: ${industry}.` : ""}
 
-Write in third person. Do not use bullet points. Do not start with "In this meeting" or "This episode". Just dive into the substance.`,
+Write in third person. Do not use bullet points. Do not start with "In this meeting" or "This episode". Do not pad the summary — if the session was short or inconclusive, say so plainly.`,
           },
           { role: "user", content: transcript },
         ],
-        temperature: 0.5,
+        temperature: 0.2,
         max_tokens: 800,
       });
       return response.choices[0]?.message?.content?.trim() || "";

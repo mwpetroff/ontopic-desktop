@@ -6,8 +6,8 @@
 |---|---|---|
 | **Node.js** | 18+ | 20 LTS or 22 LTS recommended |
 | **npm** | 8+ | Comes with Node.js |
-| **OS** | Windows 10+, macOS 12+, Ubuntu 20+ | Speaker capture is Windows-only today |
-| **RAM** | 4 GB | 8 GB recommended (Electron + Express in-process) |
+| **OS** | Windows 10 / 11 | macOS support planned (Phase 4) |
+| **RAM** | 4 GB | 8 GB recommended (Electron + Express) |
 | **Disk** | 500 MB | For node_modules + Electron binaries |
 
 ---
@@ -29,7 +29,9 @@ npm install
 
 ### 2. Configure your OpenAI API key
 
-Copy the example config and add your key:
+The recommended way is to set it through the app's **Studio Settings** page once running — it gets stored securely in the OS keychain via Electron `safeStorage`.
+
+For development, you can also pre-set it in a `.env` file (never committed):
 
 ```bash
 cp .env.example .env
@@ -40,12 +42,11 @@ Edit `.env`:
 OPENAI_API_KEY=sk-proj-...
 ```
 
-The `.env` file is gitignored and never committed. It is read by:
+The `.env` file is read by:
 - `electron/main.js` before spawning the Express server (in Electron mode)
-- `server/index.ts` via `import "dotenv/config"` (when running the server standalone)
+- `server/index.ts` via `import "dotenv/config"` when running standalone
 
-> **Production installs:** place `.env` at `%APPDATA%\OnTopic\.env` (Windows) or
-> `~/Library/Application Support/OnTopic/.env` (macOS).
+The safeStorage key (set via the UI) takes precedence over `.env`.
 
 ### 3. Verify setup
 
@@ -102,21 +103,37 @@ or just `vite` in a second terminal).
 
 ---
 
-## Windows-Specific: Speaker Capture (Stereo Mix)
+## Windows-Specific: Speaker Capture
 
-To capture the speaker (remote meeting participants), Windows needs **Stereo Mix** enabled:
+To capture remote meeting participant audio (Zoom, Teams, Webex, etc.), Windows needs a loopback capture device. OnTopic automatically detects any device whose name contains:
+
+| Priority | Device name fragment | Source |
+|---|---|---|
+| 1 | `stereo mix` | Built-in Windows mixer (requires enabling) |
+| 2 | `what u hear` | Some SoundBlaster cards |
+| 3 | `wave out mix` | Older Realtek drivers |
+| 4 | `mix output` | Various |
+| 5 | `cable output` | **VB-Audio Cable** (recommended if no Stereo Mix) |
+| 6 | `voicemeeter output` | VoiceMeeter |
+| 7 | `voicemeeter vaio` | VoiceMeeter Banana/Potato |
+| 8 | `loopback` | Generic virtual cables |
+
+### Option A — Enable Stereo Mix (no extra software)
 
 1. Right-click the speaker icon in the taskbar → **Sound settings**
 2. Click **More sound settings** → **Recording** tab
 3. Right-click in the device list → **Show Disabled Devices**
 4. Right-click **Stereo Mix** → **Enable**
 
-If your hardware doesn't have Stereo Mix, alternatives:
-- **VB-Cable** (free virtual audio cable): creates a virtual loopback device
-- **WASAPI loopback** via Virtual Audio Cable
+> Not all hardware has Stereo Mix. It is disabled on many modern laptops with Realtek audio.
 
-The app detects Stereo Mix automatically by scanning device names. If not found, you'll see
-an error from the `SpeakerCapture` component — mic-only capture still works.
+### Option B — VB-Audio Cable (recommended, free)
+
+1. Download and install [VB-Audio Cable](https://vb-audio.com/Cable/) (free)
+2. In Windows Sound settings, set **CABLE Input** as your playback device (or use it alongside your normal speakers in a multi-output arrangement)
+3. OnTopic detects it automatically — no further configuration needed
+
+If neither is available, mic-only capture still works. The app will show a **"Speaker capture unavailable"** banner at the top of the session.
 
 ---
 
@@ -282,9 +299,10 @@ The server is running stale code (tsx doesn't hot-reload). Fully quit and relaun
 The error detail is logged to `%APPDATA%\OnTopic\server.log`.
 
 ### Stereo Mix not detected on Windows
-1. Check that Stereo Mix is enabled (see [Windows Speaker Capture](#windows-specific-speaker-capture-stereo-mix))
-2. Check the device name in **Recording devices** — the app looks for: `stereo mix`, `what u hear`, `wave out mix`, `mix output`, `sum`
-3. If your device uses a different name, mic-only capture still works; speaker audio won't be captured
+1. Check Stereo Mix is enabled (see [Windows Speaker Capture](#windows-specific-speaker-capture))
+2. Check the device name in **Recording devices** — OnTopic scans for: `stereo mix`, `what u hear`, `wave out mix`, `mix output`, `cable output`, `voicemeeter output`, `loopback`
+3. If your device uses a different name, install **VB-Audio Cable** (free) as the loopback source
+4. Mic-only capture still works if no loopback device is found
 
 ### OpenAI API errors (401, 429, 500)
 - **401**: Invalid API key — check `OPENAI_API_KEY` in `.env`

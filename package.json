@@ -4,7 +4,7 @@
   "description": "OnTopic Desktop — Electron app with system-level audio capture",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "postinstall": "electron-rebuild -w naudiodon,segfault-handler",
     "rebuild": "electron-rebuild -w naudiodon,segfault-handler",
     "test": "vitest run",

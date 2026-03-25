@@ -26,6 +26,16 @@ const LOOPBACK_KEYWORDS = [
   "what u hear",
   "wave out mix",
   "mix output",
+  // VB-Audio Cable (https://vb-audio.com/Cable/)
+  "cable output",
+  // VoiceMeeter
+  "voicemeeter output",
+  "voicemeeter vaio",
+  // Blackhole / other virtual cables
+  "blackhole",
+  "soundflower",
+  // Generic fallback — any capture device with "loopback" in its name
+  "loopback",
   "sum",
 ];
 
@@ -72,13 +82,7 @@ class WasapiLoopbackCapture extends EventEmitter {
       this.emit(
         "error",
         new Error(
-          "No loopback capture device found.\n\n" +
-          "To enable Stereo Mix on Windows:\n" +
-          "  1. Right-click the speaker icon in the taskbar\n" +
-          "  2. Open Sounds → Recording tab\n" +
-          "  3. Right-click in an empty area → Show Disabled Devices\n" +
-          "  4. Right-click Stereo Mix → Enable\n\n" +
-          "Then restart OnTopic."
+          "No loopback capture device found. Enable Stereo Mix in Windows Sound settings (Recording tab → Show Disabled Devices → Enable Stereo Mix), or install VB-Audio Cable."
         )
       );
       return;

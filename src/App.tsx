@@ -19,11 +19,46 @@ import StudioSettings from "@/pages/studio-settings";
 import Analytics from "@/pages/analytics";
 import SessionGraph from "@/pages/session-graph";
 import Landing from "@/pages/landing";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
+import React from "react";
+
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-4">
+          <AlertTriangle className="h-10 w-10 text-destructive" />
+          <h2 className="text-lg font-semibold">Something went wrong</h2>
+          <pre className="text-xs text-muted-foreground bg-muted p-4 rounded max-w-2xl overflow-auto whitespace-pre-wrap text-left">
+            {this.state.error.message}{"\n"}{this.state.error.stack}
+          </pre>
+          <button
+            className="text-sm underline text-primary"
+            onClick={() => this.setState({ error: null })}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function Router() {
   return (
     <Switch>
+      <Route path="/welcome" component={Landing} />
       <Route path="/" component={Dashboard} />
       <Route path="/sessions" component={Sessions} />
       <Route path="/sessions/:id" component={SessionDetail} />
@@ -54,7 +89,9 @@ function AuthenticatedApp() {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
           </header>
           <main className="flex-1 overflow-hidden">
-            <Router />
+            <ErrorBoundary>
+              <Router />
+            </ErrorBoundary>
           </main>
         </div>
       </div>

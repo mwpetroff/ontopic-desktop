@@ -9,6 +9,7 @@ import { useTypewriter } from "@/hooks/use-typewriter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AudioVisualizer } from "@/components/audio-visualizer";
 import { MicrophoneSelector } from "@/components/microphone-selector";
 import { TopicCard } from "@/components/topic-card";
@@ -25,7 +26,8 @@ import {
   Radio, Square, Mic, MicOff, Loader2, AlertCircle, BookOpen,
   Play, ClipboardList, HelpCircle, Building2, Podcast,
   Wrench, Lightbulb, Factory, Users, BarChart3, FolderOpen, ExternalLink,
-  DollarSign, UserCheck, Target, Clock, CheckCircle2, Circle, TrendingUp
+  DollarSign, UserCheck, Target, Clock, CheckCircle2, Circle, TrendingUp,
+  Key, Speaker, X
 } from "lucide-react";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { matchSpeaker } from "@/lib/speaker-match";
@@ -157,6 +159,12 @@ export default function Dashboard() {
   const [overallSentiment, setOverallSentiment] = useState<number>(0);
   const [enableActionItems, setEnableActionItems] = useState(true);
   const [enableFollowUpQuestions, setEnableFollowUpQuestions] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(true);
+  const [showTopics, setShowTopics] = useState(true);
+  const [showSentiment, setShowSentiment] = useState(true);
+  const [showSimilarProjects, setShowSimilarProjects] = useState(true);
+  const [showBant, setShowBant] = useState(true);
+  const [showMethodology, setShowMethodology] = useState(true);
   const [selectedMicId, setSelectedMicId] = useState("");
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [followUpQuestions, setFollowUpQuestions] = useState<FollowUpQuestion[]>([]);
@@ -164,6 +172,10 @@ export default function Dashboard() {
   const [similarProjects, setSimilarProjects] = useState<SimilarProjectMatch[]>([]);
   const [bantData, setBantData] = useState<BANTData | null>(null);
   const [methodologyProgress, setMethodologyProgress] = useState<MethodologyProgress | null>(null);
+  const [apiKeyMissing, setApiKeyMissing] = useState(false);
+  const [showLowAudioWarning, setShowLowAudioWarning] = useState(false);
+  const lowAudioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionStartTimeRef = useRef<number | null>(null);
   const { toast } = useToast();
   const processingRef = useRef(false);
   const activeSessionRef = useRef<Session | null>(null);
@@ -177,6 +189,14 @@ export default function Dashboard() {
 
   const { data: settings } = useSettings();
   const isAEMode = settings?.hostRole === "account-executive";
+
+  // Check whether an OpenAI API key has been configured
+  useEffect(() => {
+    if (!window.electronAudio) return;
+    window.electronAudio.getApiKey().then((key) => {
+      setApiKeyMissing(!key || key.trim().length === 0);
+    });
+  }, []);
 
   useEffect(() => {
     activeSessionRef.current = activeSession;
@@ -385,9 +405,19 @@ export default function Dashboard() {
       await handleAnalysisResponseRef.current(data);
     } catch (error) {
       console.error("Failed to analyze audio:", error);
+      const rawMsg = error instanceof Error ? error.message : String(error);
+      // Extract server-sent error detail from e.g. "401: {"error":"...","detail":"..."}"
+      let displayMsg = "Could not process audio. Will retry on next chunk.";
+      const jsonMatch = rawMsg.match(/^\d+: (\{.*\})$/s);
+      if (jsonMatch) {
+        try {
+          const body = JSON.parse(jsonMatch[1]);
+          if (body.error) displayMsg = body.error;
+        } catch {}
+      }
       toast({
         title: "Analysis failed",
-        description: "Could not process audio. Will retry on next chunk.",
+        description: displayMsg,
         variant: "destructive",
       });
     } finally {
@@ -397,6 +427,9 @@ export default function Dashboard() {
   }, [toast]);
 
   const audioCapture = useAudioCapture({ intervalMs: 6000, deviceId: selectedMicId || undefined, onFrequencyData: onLiveFrequencyData });
+  const { captureErrors, dismissCaptureError } = audioCapture;
+  const speakerError = captureErrors.find((e) => e.source === "speaker");
+  const micError = captureErrors.find((e) => e.source === "mic");
 
   const cleanupDemoProjectsRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
@@ -449,6 +482,24 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Demo chunk failed:", error);
+      const rawMsg = error instanceof Error ? error.message : String(error);
+      const isAuthError = rawMsg.startsWith("401:");
+      if (isAuthError) {
+        // Stop the demo and surface a clear error rather than silently skipping all chunks.
+        setIsDemoRunning(false);
+        setIsProcessing(false);
+        if (demoAnimationRef.current) {
+          clearInterval(demoAnimationRef.current);
+          demoAnimationRef.current = null;
+        }
+        setDemoAudioLevel(0);
+        toast({
+          title: "OpenAI API key required",
+          description: "Please add your API key in Studio Settings, then try the demo again.",
+          variant: "destructive",
+        });
+        return;
+      }
       setIsProcessing(false);
       const nextIdx = chunkIdx + 1;
       setDemoChunkIndex(nextIdx);
@@ -459,6 +510,17 @@ export default function Dashboard() {
   }, [handleAnalysisResponse, toast, enableActionItems, enableFollowUpQuestions]);
 
   const handleStartSession = async () => {
+    const liveKey = await window.electronAudio?.getApiKey?.();
+    const liveKeyMissing = !liveKey || liveKey.trim().length === 0;
+    if (liveKeyMissing) {
+      setApiKeyMissing(true);
+      toast({
+        title: "OpenAI API key required",
+        description: "Please add your API key in Studio Settings before starting a session.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const session = await createSessionMutation.mutateAsync({
         title: sessionTitle,
@@ -466,6 +528,7 @@ export default function Dashboard() {
         industry: industry || undefined,
       });
       await audioCapture.startCapture(sendAudioChunk);
+      sessionStartTimeRef.current = Date.now();
       setIsListening(true);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -477,6 +540,41 @@ export default function Dashboard() {
       });
     }
   };
+
+  // ── Low-audio detection ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const level = audioCapture.audioLevel;
+    // Only run during a live (non-demo) session, after a 15-second grace period
+    if (!isListening || isDemoRunning || isMuted || !sessionStartTimeRef.current) return;
+    if (Date.now() - sessionStartTimeRef.current < 15_000) return;
+
+    const LOW_THRESHOLD = 0.01; // RMS below this = effectively silent
+    if (level < LOW_THRESHOLD) {
+      if (!lowAudioTimerRef.current) {
+        lowAudioTimerRef.current = setTimeout(() => {
+          setShowLowAudioWarning(true);
+        }, 10_000); // 10 seconds of sustained silence → show warning
+      }
+    } else {
+      if (lowAudioTimerRef.current) {
+        clearTimeout(lowAudioTimerRef.current);
+        lowAudioTimerRef.current = null;
+      }
+      setShowLowAudioWarning(false);
+    }
+  }, [audioCapture.audioLevel, isListening, isDemoRunning, isMuted]);
+
+  // Clear timer on unmount / session end
+  useEffect(() => {
+    if (!isListening) {
+      if (lowAudioTimerRef.current) {
+        clearTimeout(lowAudioTimerRef.current);
+        lowAudioTimerRef.current = null;
+      }
+      setShowLowAudioWarning(false);
+      sessionStartTimeRef.current = null;
+    }
+  }, [isListening]);
 
   const cleanupDemoProjects = useCallback(async () => {
     for (const id of demoProjectIdsRef.current) {
@@ -494,6 +592,20 @@ export default function Dashboard() {
 
   const handleStartDemo = async () => {
     try {
+      // Always check the current key state rather than relying on mount-time snapshot.
+      const liveKey = await window.electronAudio?.getApiKey?.();
+      const liveKeyMissing = !liveKey || liveKey.trim().length === 0;
+      if (liveKeyMissing) {
+        setApiKeyMissing(true);
+        toast({
+          title: "OpenAI API key required",
+          description: "Please add your API key in Studio Settings before running the demo.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Key is present — clear any stale banner.
+      setApiKeyMissing(false);
       const isAE = settings?.hostRole === "account-executive";
 
       if (isAE) {
@@ -609,6 +721,62 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* ── Setup warnings ─────────────────────────────────────── */}
+        {apiKeyMissing && (
+          <div className="px-4 pt-4">
+            <Alert variant="destructive">
+              <Key className="h-4 w-4" />
+              <AlertTitle>OpenAI API key not configured</AlertTitle>
+              <AlertDescription className="text-xs">
+                You won&apos;t be able to transcribe or analyze audio without an API key.{" "}
+                <button
+                  className="underline font-medium"
+                  onClick={() => navigate("/studio-settings")}
+                >
+                  Go to Studio Settings
+                </button>{" "}
+                to add your key, then come back to go live.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+        {speakerError && (
+          <div className="px-4 pt-3">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <AlertTitle>Speaker capture unavailable</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    Remote participant audio won&apos;t be captured. To enable it on Windows:{" "}
+                    right-click the speaker icon → Sounds → Recording tab → Show Disabled Devices
+                    → right-click <strong>Stereo Mix</strong> → Enable. Then restart OnTopic.
+                  </AlertDescription>
+                </div>
+                <button onClick={() => dismissCaptureError("speaker")} className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </Alert>
+          </div>
+        )}
+        {micError && (
+          <div className="px-4 pt-3">
+            <Alert variant="destructive">
+              <Mic className="h-4 w-4" />
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <AlertTitle>Microphone error</AlertTitle>
+                  <AlertDescription className="text-xs">{micError.message}</AlertDescription>
+                </div>
+                <button onClick={() => dismissCaptureError("mic")} className="shrink-0 mt-0.5">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </Alert>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
         <div className="flex flex-col items-center justify-center gap-6 p-8 min-h-full">
           <AudioVisualizer level={0} isActive={false} size={120} />
@@ -665,23 +833,43 @@ export default function Dashboard() {
 
             <Card className="p-3">
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Show Features</p>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer flex-1">
-                  <Switch
-                    checked={enableActionItems}
-                    onCheckedChange={setEnableActionItems}
-                    data-testid="toggle-action-items"
-                  />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={showTranscript} onCheckedChange={setShowTranscript} data-testid="toggle-transcript" />
+                  <span className="text-xs">Transcript</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={showTopics} onCheckedChange={setShowTopics} data-testid="toggle-topics" />
+                  <span className="text-xs">Topics</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={showSentiment} onCheckedChange={setShowSentiment} data-testid="toggle-sentiment" />
+                  <span className="text-xs">Sentiment</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={showSimilarProjects} onCheckedChange={setShowSimilarProjects} data-testid="toggle-similar-projects" />
+                  <span className="text-xs">Similar Projects</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={enableActionItems} onCheckedChange={setEnableActionItems} data-testid="toggle-action-items" />
                   <span className="text-xs">Action Items</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer flex-1">
-                  <Switch
-                    checked={enableFollowUpQuestions}
-                    onCheckedChange={setEnableFollowUpQuestions}
-                    data-testid="toggle-follow-up-questions"
-                  />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={enableFollowUpQuestions} onCheckedChange={setEnableFollowUpQuestions} data-testid="toggle-follow-up-questions" />
                   <span className="text-xs">Follow-Ups</span>
                 </label>
+                {isAEMode && (
+                  <>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Switch checked={showBant} onCheckedChange={setShowBant} data-testid="toggle-bant" />
+                      <span className="text-xs">BANT</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <Switch checked={showMethodology} onCheckedChange={setShowMethodology} data-testid="toggle-methodology" />
+                      <span className="text-xs">Methodology</span>
+                    </label>
+                  </>
+                )}
               </div>
             </Card>
 
@@ -835,6 +1023,26 @@ export default function Dashboard() {
 
       <div className="flex-1 overflow-hidden flex flex-col">
 
+        {/* Low audio warning */}
+        {showLowAudioWarning && !isMuted && (
+          <div className="shrink-0 px-4 pt-2">
+            <Alert variant="destructive" className="py-2">
+              <MicOff className="h-4 w-4" />
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <AlertTitle className="text-sm">No audio detected</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    Check your microphone is connected and not muted in Windows Sound settings. If using a headset, ensure it is set as the default recording device.
+                  </AlertDescription>
+                </div>
+                <button onClick={() => setShowLowAudioWarning(false)} className="shrink-0 mt-0.5">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </Alert>
+          </div>
+        )}
+
         {/* AE-mode pinned top row: Sales Questions | BANT | Sales Methodology */}
         {isAEMode && (
           <div className="shrink-0 grid grid-cols-3 border-b border-border">
@@ -887,7 +1095,16 @@ export default function Dashboard() {
                 <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
                   {bantData ? Object.values(bantData).filter(Boolean).length : 0}/4
                 </Badge>
+                <Switch
+                  checked={showBant}
+                  onCheckedChange={setShowBant}
+                  className="scale-[0.6] ml-auto"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                  data-testid="toggle-bant-inline"
+                />
               </div>
+              {showBant ? (
               <div className="p-2 space-y-1.5">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="flex gap-0.5 flex-1">
@@ -929,6 +1146,12 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <Target className="h-5 w-5 text-muted-foreground/10 mb-2" />
+                  <p className="text-xs text-muted-foreground">BANT hidden.</p>
+                </div>
+              )}
             </div>
 
             {/* Sales Methodology */}
@@ -937,11 +1160,20 @@ export default function Dashboard() {
                 <TrendingUp className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold">Sales Methodology</span>
                 {(methodologyProgress || settings?.salesMethodology) && (
-                  <span className="text-[10px] text-muted-foreground ml-auto truncate max-w-[80px]">
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
                     {METHODOLOGY_LABELS[(methodologyProgress?.methodology ?? settings?.salesMethodology) as string] ?? ""}
                   </span>
                 )}
+                <Switch
+                  checked={showMethodology}
+                  onCheckedChange={setShowMethodology}
+                  className="scale-[0.6] ml-auto"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                  data-testid="toggle-methodology-inline"
+                />
               </div>
+              {showMethodology ? (
               <div className="p-2">
                 {(methodologyProgress || settings?.salesMethodology) ? (
                   methodologyProgress ? (
@@ -985,6 +1217,12 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                  <TrendingUp className="h-5 w-5 text-muted-foreground/10 mb-2" />
+                  <p className="text-xs text-muted-foreground">Methodology hidden.</p>
+                </div>
+              )}
             </div>
 
           </div>
@@ -1000,9 +1238,17 @@ export default function Dashboard() {
                 <>
                   <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-xs font-semibold">Transcript</span>
+                  <Switch
+                    checked={showTranscript}
+                    onCheckedChange={setShowTranscript}
+                    className="scale-[0.6] ml-auto"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                    data-testid="toggle-transcript-inline"
+                  />
                 </>
               ),
-              content: (
+              content: showTranscript ? (
                 <ScrollArea className="flex-1">
                   <div className="p-3">
                     {displayedTranscript ? (
@@ -1029,6 +1275,11 @@ export default function Dashboard() {
                     )}
                   </div>
                 </ScrollArea>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <BookOpen className="h-6 w-6 text-muted-foreground/10 mb-2" />
+                  <p className="text-xs text-muted-foreground">Transcript hidden.</p>
+                </div>
               ),
             },
             {
@@ -1045,9 +1296,17 @@ export default function Dashboard() {
                       {toolCount}T {conceptCount}C{industryCount > 0 ? ` ${industryCount}I` : ""}
                     </span>
                   )}
+                  <Switch
+                    checked={showTopics}
+                    onCheckedChange={setShowTopics}
+                    className="scale-[0.6] ml-auto"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                    data-testid="toggle-topics-inline"
+                  />
                 </>
               ),
-              content: (
+              content: showTopics ? (
                 <ScrollArea className="flex-1">
                   <div className="p-2 space-y-1.5">
                     {topics.length === 0 ? (
@@ -1070,6 +1329,11 @@ export default function Dashboard() {
                     )}
                   </div>
                 </ScrollArea>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <AlertCircle className="h-6 w-6 text-muted-foreground/10 mb-2" />
+                  <p className="text-xs text-muted-foreground">Topics hidden.</p>
+                </div>
               ),
             },
             {
@@ -1128,9 +1392,17 @@ export default function Dashboard() {
                   {sentimentData.length > 0 && (
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{sentimentData.length}</Badge>
                   )}
+                  <Switch
+                    checked={showSentiment}
+                    onCheckedChange={setShowSentiment}
+                    className="scale-[0.6] ml-auto"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                    data-testid="toggle-sentiment-inline"
+                  />
                 </>
               ),
-              content: (
+              content: showSentiment ? (
                 <ScrollArea className="flex-1">
                   <div className="p-2">
                     {sentimentData.length > 0 ? (
@@ -1149,6 +1421,11 @@ export default function Dashboard() {
                     )}
                   </div>
                 </ScrollArea>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <BarChart3 className="h-6 w-6 text-muted-foreground/10 mb-2" />
+                  <p className="text-xs text-muted-foreground">Sentiment hidden.</p>
+                </div>
               ),
             },
             {
@@ -1205,9 +1482,17 @@ export default function Dashboard() {
                   {consolidatedProjects.length > 0 && (
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{consolidatedProjects.length}</Badge>
                   )}
+                  <Switch
+                    checked={showSimilarProjects}
+                    onCheckedChange={setShowSimilarProjects}
+                    className="scale-[0.6] ml-auto"
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+                    data-testid="toggle-similar-projects-inline"
+                  />
                 </>
               ),
-              content: (
+              content: showSimilarProjects ? (
                 <ScrollArea className="flex-1">
                   <div className="p-2 space-y-2">
                     {consolidatedProjects.length > 0 ? (
@@ -1260,6 +1545,11 @@ export default function Dashboard() {
                     )}
                   </div>
                 </ScrollArea>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <FolderOpen className="h-6 w-6 text-muted-foreground/10 mb-2" />
+                  <p className="text-xs text-muted-foreground">Similar Projects hidden.</p>
+                </div>
               ),
             },
           ].filter(col => !isAEMode || col.id !== "followups")

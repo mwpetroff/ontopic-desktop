@@ -9,7 +9,7 @@
    *  - Handle app lifecycle (tray icon, minimize-to-tray, auto-update)
    */
 
-  const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } = require("electron");
+  const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, safeStorage } = require("electron");
   const path = require("path");
   const net  = require("net");
   const { spawn } = require("child_process");
@@ -29,10 +29,22 @@
       const { default: Store } = await import("electron-store");
       store = new Store({
         schema: {
-          openaiApiKey:      { type: "string",  default: "" },
-          wizardCompleted:   { type: "boolean", default: false },
+          // openaiApiKeyEncrypted: safeStorage blob stored as base64.
+          // Legacy plaintext openaiApiKey is migrated on first access.
+          openaiApiKeyEncrypted: { type: "string", default: "" },
+          wizardCompleted:       { type: "boolean", default: false },
         },
       });
+
+      // ─── One-time migration: plaintext → encrypted ──────────────────────
+      // If the old plaintext key exists, encrypt it and delete the old field.
+      const legacy = store.get("openaiApiKey");
+      if (legacy && safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(legacy).toString("base64");
+        store.set("openaiApiKeyEncrypted", encrypted);
+        store.delete("openaiApiKey");
+        console.log("[main] Migrated openaiApiKey to safeStorage encryption.");
+      }
     }
     return store;
   }
@@ -55,15 +67,16 @@
         ? path.join(process.env.HOME, "Library", "Application Support")
         : path.join(process.env.HOME, ".local", "share"));
 
-    const candidates = [
-      path.resolve(__dirname, "../.env"),                      // project root (dev)
-      path.join(appData, "OnTopic", ".env"),                   // user data dir (prod)
-    ];
+    // Only check project root in dev mode. In production the .env file
+    // is not present and all config comes from safeStorage.
+    const candidates = isDev
+      ? [path.resolve(__dirname, "../.env")]
+      : [path.join(appData, "OnTopic", ".env")];
 
     for (const envPath of candidates) {
       const result = dotenvConfig({ path: envPath, override: false });
       if (!result.error) {
-        console.log(`[main] Loaded config from ${envPath}`);
+        console.log(`[main] Loaded config from ${envPath} (dev override)`);
         return;
       }
     }
@@ -73,10 +86,26 @@
 
   // ─── Express Backend ──────────────────────────────────────────────────────────
 
-  async function startServer() {
-    // API key: .env file takes priority; electron-store is a legacy fallback.
+  // ─── Secure key helpers ───────────────────────────────────────────────────────
+
+  async function getDecryptedApiKey() {
     const s = await getStore();
-    const apiKey = process.env.OPENAI_API_KEY || s.get("openaiApiKey") || "";
+    const blob = s.get("openaiApiKeyEncrypted");
+    if (blob && safeStorage.isEncryptionAvailable()) {
+      try {
+        return safeStorage.decryptString(Buffer.from(blob, "base64"));
+      } catch (e) {
+        console.error("[main] Failed to decrypt API key:", e.message);
+      }
+    }
+    // Fallback: if safeStorage unavailable or blob corrupt, return nothing.
+    return "";
+  }
+
+  async function startServer() {
+    // Priority: .env OPENAI_API_KEY (dev override) > safeStorage encrypted key.
+    const storedKey = await getDecryptedApiKey();
+    const apiKey = process.env.OPENAI_API_KEY || storedKey;
 
     const serverScript = path.resolve(__dirname, "../server/index.ts");
     const tsxBin = path.resolve(__dirname, "../node_modules/.bin/tsx");
@@ -193,15 +222,15 @@
     const mic = new MicCapture({ sampleRate: 16000, channels: 1, deviceId: micDeviceId });
     const speaker = new SpeakerCapture({ sampleRate: 16000, channels: 1 });
 
-    mic.on("data",  (pcm) => audioMixer.push("mic", pcm));
+    mic.on("data",  (pcm) => audioMixer?.push("mic", pcm));
     mic.on("error", (err) => {
       console.error("[main] MicCapture error:", err.message);
       mainWindow?.webContents.send("capture:error", { source: "mic", message: err.message });
     });
 
-    speaker.on("data",  (pcm) => audioMixer.push("speaker", pcm));
+    speaker.on("data",  (pcm) => audioMixer?.push("speaker", pcm));
     speaker.on("error", (err) => {
-      console.error("[main] SpeakerCapture error:", err.message);
+      console.warn("[main] SpeakerCapture unavailable:", err.message);
       mainWindow?.webContents.send("capture:error", { source: "speaker", message: err.message });
     });
 
@@ -243,13 +272,21 @@
   // ─── API Key Management ───────────────────────────────────────────────────────
 
   ipcMain.handle("settings:getApiKey", async () => {
-    const s = await getStore();
-    return s.get("openaiApiKey") || "";
+    return await getDecryptedApiKey();
   });
 
   ipcMain.handle("settings:setApiKey", async (_e, key) => {
     const s = await getStore();
-    s.set("openaiApiKey", key);
+    const trimmed = (key || "").trim();
+    if (trimmed && safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(trimmed).toString("base64");
+      s.set("openaiApiKeyEncrypted", encrypted);
+    } else {
+      // safeStorage unavailable (rare — headless Linux) — store cleared text
+      // wrapped in a minimal base64 to keep the same field type.
+      s.set("openaiApiKeyEncrypted", Buffer.from(trimmed).toString("base64"));
+      if (trimmed) console.warn("[main] safeStorage unavailable — key stored as base64 only.");
+    }
     // Restart server so it picks up the new key immediately.
     if (serverProcess) {
       serverProcess.kill();
@@ -258,6 +295,28 @@
     await startServer();
     console.log("[main] API key updated — server restarted");
     return { ok: true };
+  });
+
+  ipcMain.handle("settings:validateApiKey", async (_e, key) => {
+    // Make a minimal OpenAI API call to verify the key without incurring cost.
+    try {
+      const https = require("https");
+      await new Promise((resolve, reject) => {
+        const req = https.request(
+          { hostname: "api.openai.com", path: "/v1/models", method: "GET",
+            headers: { Authorization: `Bearer ${key}`, "User-Agent": "OnTopic/1.0" } },
+          (res) => {
+            if (res.statusCode === 200) resolve(true);
+            else reject(new Error(`HTTP ${res.statusCode}`));
+          }
+        );
+        req.on("error", reject);
+        req.end();
+      });
+      return { valid: true };
+    } catch (e) {
+      return { valid: false, error: e.message };
+    }
   });
 
   // Return all input devices so the renderer can present a "choose mic" UI.
@@ -294,10 +353,124 @@
     });
   }
 
+  /**
+   * Returns true if something is currently listening on the given TCP port.
+   */
+  function isPortInUse(port) {
+    return new Promise((resolve) => {
+      const sock = net.connect({ port, host: "127.0.0.1" });
+      sock.once("connect", () => { sock.destroy(); resolve(true); });
+      sock.once("error",   () => { sock.destroy(); resolve(false); });
+    });
+  }
+
+  /**
+   * Attempt to kill any process currently holding the given TCP port.
+   * On Windows uses netstat + taskkill; on Unix uses lsof + kill.
+   * Fails silently — caller should re-check with waitForPort.
+   */
+  async function killProcessOnPort(port) {
+    const { execSync } = require("child_process");
+    try {
+      if (process.platform === "win32") {
+        // netstat -ano lists all TCP connections with PIDs in the last column.
+        const out = execSync(`netstat -ano`, { encoding: "utf8", timeout: 5000 });
+        const lines = out.split("\n");
+        const pids = new Set();
+        for (const line of lines) {
+          // Match lines with LISTENING on the target port.
+          const m = line.match(/:${port}\s.*LISTENING\s+(\d+)/);
+          if (m) pids.add(m[1]);
+        }
+        for (const pid of pids) {
+          try {
+            execSync(`taskkill /PID ${pid} /T /F`, { timeout: 5000 });
+            console.log(`[main] Killed stale process PID=${pid} holding port ${port}`);
+          } catch {}
+        }
+      } else {
+        // lsof -ti returns just the PIDs for processes listening on the port.
+        const pids = execSync(`lsof -ti tcp:${port}`, { encoding: "utf8", timeout: 5000 })
+          .split("\n")
+          .map(s => s.trim())
+          .filter(Boolean);
+        for (const pid of pids) {
+          try {
+            execSync(`kill -9 ${pid}`, { timeout: 5000 });
+            console.log(`[main] Killed stale process PID=${pid} holding port ${port}`);
+          } catch {}
+        }
+      }
+      // Give the OS a moment to release the port.
+      await new Promise(r => setTimeout(r, 300));
+    } catch (e) {
+      console.warn(`[main] killProcessOnPort(${port}) failed:`, e.message);
+    }
+  }
+
+  // ─── Single-instance lock ─────────────────────────────────────────────────────
+  // Prevent a second copy of the app from opening. If the user tries to launch
+  // a second instance, focus the already-running window instead.
+  const gotLock = app.requestSingleInstanceLock();
+  if (!gotLock) {
+    console.log("[main] Another instance is already running — quitting.");
+    app.quit();
+  } else {
+    app.on("second-instance", (_event, _argv, _cwd) => {
+      // A second launch was attempted. Restore and focus the existing window.
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    });
+  }
+
   // ─── App Lifecycle ────────────────────────────────────────────────────────────
 
   app.whenReady().then(async () => {
+    // ─── Content Security Policy ──────────────────────────────────────────────
+    // In dev, Vite HMR requires 'unsafe-eval' so we allow it but scope sources
+    // tightly.  In production the policy is strict — no eval, no inline scripts.
+    const { session } = require("electron");
+    const devCSP = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' http://localhost:5173",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: blob:",
+      "connect-src 'self' http://localhost:3000 ws://localhost:3000 http://localhost:5173 ws://localhost:5173 https://api.openai.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+    ].join("; ");
+    const prodCSP = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: blob:",
+      "connect-src 'self' https://api.openai.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+    ].join("; ");
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [isDev ? devCSP : prodCSP],
+        },
+      });
+    });
+
     const s = await getStore();
+
+    // Kill any stale process that's already holding port 3000 (e.g. a leftover
+    // server from a previous crashed session) before trying to spawn a new one.
+    if (await isPortInUse(3000)) {
+      console.log("[main] Port 3000 is already in use — attempting to clear it...");
+      await killProcessOnPort(3000);
+      if (await isPortInUse(3000)) {
+        console.warn("[main] Port 3000 still in use after kill attempt — server may fail to start.");
+      } else {
+        console.log("[main] Port 3000 cleared successfully.");
+      }
+    }
+
     await startServer();
     createTray();
     try {

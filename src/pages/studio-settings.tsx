@@ -8,20 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key } from "lucide-react";
+import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key, AlertCircle, CheckCircle2 } from "lucide-react";
 import { MicTestWidget } from "@/components/mic-test-widget";
-
-declare global {
-  interface Window {
-    electronAudio?: {
-      getApiKey: () => Promise<string>;
-      setApiKey: (key: string) => Promise<void>;
-      onAudioChunk: (cb: (chunk: { buffer: ArrayBuffer; label: string }) => void) => () => void;
-      startCapture: () => Promise<void>;
-      stopCapture: () => Promise<void>;
-    };
-  }
-}
 
 const HOST_ROLES = [
   {
@@ -300,8 +288,11 @@ export default function StudioSettings() {
                     <SelectContent>
                       <SelectItem value="gpt-4o-mini">gpt-4o-mini (default, fast)</SelectItem>
                       <SelectItem value="gpt-4o">gpt-4o (higher quality)</SelectItem>
-                      <SelectItem value="gpt-4.1-mini">gpt-4.1-mini</SelectItem>
-                      <SelectItem value="gpt-4.1-nano">gpt-4.1-nano (fastest)</SelectItem>
+                        <SelectItem value="gpt-4.1-nano">gpt-4.1-nano (fastest)</SelectItem>
+                        <SelectItem value="gpt-4.1-mini">gpt-4.1-mini</SelectItem>
+                        <SelectItem value="gpt-4.1">gpt-4.1 (most capable, higher cost)</SelectItem>
+                        <SelectItem value="o3-mini">o3-mini (reasoning model)</SelectItem>
+                        <SelectItem value="o4-mini">o4-mini (fast reasoning)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -389,11 +380,27 @@ export default function StudioSettings() {
               <div className="flex items-center gap-2 mb-1">
                 <Key className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold">OpenAI API Key</h2>
+                {!apiKey ? (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                    <AlertCircle className="h-3 w-3" /> Required
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-green-600 dark:text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">
+                    <CheckCircle2 className="h-3 w-3" /> Configured
+                  </span>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mb-4">
                 Your API key is stored locally on this device and never sent to any external server.
                 It is passed directly to the OpenAI API for transcription and analysis.
               </p>
+              {!apiKey && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-start gap-2">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  No API key set. You won&apos;t be able to transcribe or analyze audio until you add one.
+                  Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="underline">platform.openai.com/api-keys</a>.
+                </p>
+              )}
               <div className="flex gap-2">
                 <Input
                   type="password"
