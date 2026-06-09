@@ -21,6 +21,18 @@ function getDbPath(): string {
 const dbPath = process.env.DATABASE_PATH || getDbPath();
 console.log(`[db] SQLite database at: ${dbPath}`);
 
+// Back up the database before running migrations so a bad migration
+// doesn't corrupt the only copy of the user's data.
+if (fs.existsSync(dbPath)) {
+  const backupPath = dbPath.replace(/\.sqlite$/, ".sqlite.bak");
+  try {
+    fs.copyFileSync(dbPath, backupPath);
+    console.log(`[db] Pre-migration backup: ${backupPath}`);
+  } catch (err) {
+    console.warn("[db] Could not create pre-migration backup:", err);
+  }
+}
+
 const sqlite = new Database(dbPath);
 
 // Enable WAL mode for better concurrent read performance.

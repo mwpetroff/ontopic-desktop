@@ -186,10 +186,14 @@ function ClientGroupSection({ group, onDelete }: { group: ClientGroup; onDelete:
   );
 }
 
+const PAGE_SIZE = 100;
+
 export default function Sessions() {
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: sessions = [], isLoading } = useSessions();
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const { data: sessions = [], isLoading } = useSessions(limit);
   const deleteMutation = useDeleteSession();
+  const mayHaveMore = sessions.length >= limit;
 
   const completedSessions = useMemo(() => {
     const completed = sessions.filter(s => s.status === "completed");
@@ -325,6 +329,20 @@ export default function Sessions() {
                     showClient
                   />
                 )
+              )}
+              {mayHaveMore && !searchQuery.trim() && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground"
+                    onClick={() => setLimit(l => l + PAGE_SIZE)}
+                    data-testid="button-load-more-sessions"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                    Load more sessions
+                  </Button>
+                </div>
               )}
             </>
           )}

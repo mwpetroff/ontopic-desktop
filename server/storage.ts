@@ -9,7 +9,7 @@ export interface IStorage {
 
   createSession(data: InsertSession): Promise<Session>;
   getSession(id: number): Promise<Session | undefined>;
-  getAllSessions(): Promise<Session[]>;
+  getAllSessions(limit?: number, offset?: number): Promise<Session[]>;
   updateSession(id: number, data: Partial<Session>): Promise<Session | undefined>;
   deleteSession(id: number): Promise<void>;
   endSession(id: number): Promise<Session | undefined>;
@@ -69,8 +69,9 @@ export class DatabaseStorage implements IStorage {
     return session;
   }
 
-  async getAllSessions(): Promise<Session[]> {
-    return db.select().from(sessions).orderBy(desc(sessions.createdAt));
+  async getAllSessions(limit = 100, offset = 0): Promise<Session[]> {
+    return db.select().from(sessions).orderBy(desc(sessions.createdAt))
+      .limit(limit).offset(offset);
   }
 
   async updateSession(id: number, data: Partial<Session>): Promise<Session | undefined> {

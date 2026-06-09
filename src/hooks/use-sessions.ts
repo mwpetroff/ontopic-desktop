@@ -2,9 +2,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Session } from "@shared/schema";
 
-export function useSessions() {
+export function useSessions(limit = 100) {
   return useQuery<Session[]>({
-    queryKey: ["/api/sessions"],
+    queryKey: ["/api/sessions", { limit }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/sessions?limit=${limit}`);
+      return res.json();
+    },
   });
 }
 

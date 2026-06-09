@@ -29,6 +29,21 @@ function enqueueForSession<T>(sessionId: number, fn: () => Promise<T>): Promise<
   return next as Promise<T>;
 }
 
+// ─── Per-session rate limiter (A-15) ─────────────────────────────────────────
+// Prevents rapid-fire /analyze calls (bugs, retries) from running up API costs.
+// Normal live chunks arrive every 5–30 s; demo chunks every ~10 s. 2 s is a
+// safety net that never fires in normal use but blocks pathological bursts.
+const sessionLastAnalyzed = new Map<number, number>();
+const MIN_ANALYZE_INTERVAL_MS = 2_000;
+
+function checkAnalyzeRateLimit(sessionId: number): boolean {
+  const last = sessionLastAnalyzed.get(sessionId) ?? 0;
+  const now = Date.now();
+  if (now - last < MIN_ANALYZE_INTERVAL_MS) return false;
+  sessionLastAnalyzed.set(sessionId, now);
+  return true;
+}
+
 // ─── Static prompt context cache (A-09) ──────────────────────────────────────
 // Partners, competencies, and reference projects are global and change rarely.
 // Cache them to avoid 3 DB reads + string rebuilds on every analyze call.
@@ -378,9 +393,14 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
-  app.get("/api/sessions", async (_req, res) => {
+  app.get("/api/sessions", async (req, res) => {
     try {
-      const sessions = await storage.getAllSessions();
+      const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string) : 100;
+      const offset = req.query.offset !== undefined ? parseInt(req.query.offset as string) : 0;
+      const sessions = await storage.getAllSessions(
+        Number.isFinite(limit) && limit > 0 ? limit : 100,
+        Number.isFinite(offset) && offset >= 0 ? offset : 0,
+      );
       res.json(sessions);
     } catch (error) {
       console.error("Error fetching sessions:", error);
@@ -534,6 +554,10 @@ export async function registerRoutes(
         return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Settings." });
       }
 
+      if (!checkAnalyzeRateLimit(sessionId)) {
+        return res.status(429).json({ error: "Rate limit: analysis requests are too frequent. Please wait before sending another chunk." });
+      }
+
       const session = await storage.getSession(sessionId);
       if (!session) return res.status(404).json({ error: "Session not found" });
 
@@ -608,6 +632,10 @@ export async function registerRoutes(
 
       if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "not-configured") {
         return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Settings." });
+      }
+
+      if (!checkAnalyzeRateLimit(sessionId)) {
+        return res.status(429).json({ error: "Rate limit: analysis requests are too frequent." });
       }
 
       const features: FeatureFlags = {
