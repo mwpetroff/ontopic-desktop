@@ -85,5 +85,16 @@
     });
   }
 
-  module.exports = { runSetupWizardIfNeeded };
+  async function runSetupWizard(mainWindow) {
+    const platform = process.platform;
+    if (platform === "darwin") {
+      await setupMac(mainWindow);
+    } else if (platform === "win32") {
+      await setupWin(mainWindow);
+    } else {
+      await setupLinux(mainWindow);
+    }
+  }
+
+  module.exports = { runSetupWizardIfNeeded, runSetupWizard };
   

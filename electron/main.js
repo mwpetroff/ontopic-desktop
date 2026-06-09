@@ -17,7 +17,7 @@
   const { MicCapture } = require("./audio/mic-capture");
   const { SpeakerCapture } = require("./audio/speaker-capture");
   const { AudioMixer } = require("./audio/audio-mixer");
-  const { runSetupWizardIfNeeded } = require("./setup-wizard");
+  const { runSetupWizardIfNeeded, runSetupWizard } = require("./setup-wizard");
 
   const isDev = process.env.NODE_ENV === "development";
 
@@ -332,6 +332,12 @@
       .map(({ id, name, hostAPIName }) => ({ id, name, hostAPIName }));
     console.log(`[main] IPC devices:list — returning ${inputs.length} input devices`);
     return inputs;
+  });
+
+  ipcMain.handle("wizard:rerun", async () => {
+    if (mainWindow) {
+      await runSetupWizard(mainWindow);
+    }
   });
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld("electronAudio", {
   },
 
   // ── Settings ──────────────────────────────────────────────────────────────
-  getApiKey: ()    => ipcRenderer.invoke("settings:getApiKey"),
-  setApiKey: (key) => ipcRenderer.invoke("settings:setApiKey", key),
+  getApiKey:          ()    => ipcRenderer.invoke("settings:getApiKey"),
+  setApiKey:          (key) => ipcRenderer.invoke("settings:setApiKey", key),
+  rerunSetupWizard:   ()    => ipcRenderer.invoke("wizard:rerun"),
 });

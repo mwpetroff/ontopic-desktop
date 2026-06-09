@@ -36,8 +36,9 @@ declare global {
       onAudioChunk:    (cb: (data: { buffer: ArrayBuffer; label: "mic" | "speaker" }) => void) => () => void;
       onCaptureStatus: (cb: (data: { active: boolean }) => void) => () => void;
       onCaptureError:  (cb: (data: { source: "mic" | "speaker"; message: string }) => void) => () => void;
-      getApiKey:       () => Promise<string>;
-      setApiKey:       (key: string) => Promise<void>;
+      getApiKey:          () => Promise<string>;
+      setApiKey:          (key: string) => Promise<void>;
+      rerunSetupWizard:   () => Promise<void>;
     };
   }
 }

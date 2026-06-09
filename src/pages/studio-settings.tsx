@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { MicTestWidget } from "@/components/mic-test-widget";
 
 const HOST_ROLES = [
@@ -458,6 +458,27 @@ export default function StudioSettings() {
             </p>
             <MicTestWidget />
           </div>
+
+          {isElectron && (
+            <div className="border-t border-border pt-4">
+              <div className="flex items-center gap-2 mb-1">
+                <RefreshCw className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold">Audio Setup</h2>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Re-run the audio capture setup guide if you changed your audio device or are experiencing problems with speaker capture.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.electronAudio!.rerunSetupWizard()}
+                data-testid="button-rerun-setup-wizard"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                Re-run Setup Wizard
+              </Button>
+            </div>
+          )}
 
           <div className="border-t border-border pt-4">
             <h2 className="text-sm font-semibold mb-1">How Roles Work</h2>
