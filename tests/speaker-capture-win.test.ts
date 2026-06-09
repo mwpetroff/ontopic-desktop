@@ -48,53 +48,77 @@ describe("findLoopbackDevice", () => {
     expect(findLoopbackDevice(mockPortAudio)).toBeNull();
   });
 
+  it("Strategy 1: picks WASAPI output device and sets mode to wasapi-loopback", () => {
+    mockDevices.push({ id: 20, name: "Speakers (Realtek HD Audio)", hostAPIName: "Windows WASAPI", maxOutputChannels: 2, maxInputChannels: 0 });
+    const result = findLoopbackDevice(mockPortAudio);
+    expect(result?.device.id).toBe(20);
+    expect(result?.mode).toBe("wasapi-loopback");
+    expect(result?.channelCount).toBe(2);
+  });
+
+  it("Strategy 1: prefers the WASAPI default output (defaultLowOutputLatency > 0)", () => {
+    mockDevices.push({ id: 21, name: "HDMI Output",    hostAPIName: "Windows WASAPI", maxOutputChannels: 2, defaultLowOutputLatency: 0 });
+    mockDevices.push({ id: 22, name: "Speakers (USB)", hostAPIName: "Windows WASAPI", maxOutputChannels: 2, defaultLowOutputLatency: 0.01 });
+    const result = findLoopbackDevice(mockPortAudio);
+    expect(result?.device.id).toBe(22);
+    expect(result?.mode).toBe("wasapi-loopback");
+  });
+
+  it("Strategy 1 takes priority over Strategy 2 (named loopback)", () => {
+    mockDevices.push({ id: 5,  name: "Stereo Mix",               maxInputChannels: 2 });
+    mockDevices.push({ id: 23, name: "Speakers (Realtek HD Audio)", hostAPIName: "Windows WASAPI", maxOutputChannels: 2, defaultLowOutputLatency: 0 });
+    const result = findLoopbackDevice(mockPortAudio);
+    expect(result?.device.id).toBe(23);
+    expect(result?.mode).toBe("wasapi-loopback");
+  });
+
   it("finds a device named 'Stereo Mix' (case-insensitive)", () => {
     mockDevices.push({ id: 5, name: "Stereo Mix (Realtek)", maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(5);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(5);
   });
 
   it("finds a device named 'What U Hear'", () => {
     mockDevices.push({ id: 3, name: "What U Hear (SoundBlaster)", maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(3);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(3);
   });
 
   it("finds a device named 'Wave Out Mix'", () => {
     mockDevices.push({ id: 2, name: "Wave Out Mix", maxInputChannels: 1 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(2);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(2);
   });
 
   it("ignores output-only devices (maxInputChannels === 0)", () => {
     mockDevices.push({ id: 1, name: "Stereo Mix",  maxInputChannels: 0 });
     mockDevices.push({ id: 2, name: "What U Hear", maxInputChannels: 2 });
     // stereo mix is output-only — what u hear should match instead
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(2);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(2);
   });
 
   it("returns the highest-priority keyword match first", () => {
     // "what u hear" is lower priority than "stereo mix"
     mockDevices.push({ id: 10, name: "What U Hear", maxInputChannels: 2 });
     mockDevices.push({ id: 11, name: "Stereo Mix",  maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(11);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(11);
   });
 
   it("finds a VB-Audio Cable device by 'cable output'", () => {
     mockDevices.push({ id: 8, name: "CABLE Output (VB-Audio Virtual Cable)", maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(8);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(8);
   });
 
   it("finds a VoiceMeeter Output device", () => {
     mockDevices.push({ id: 9, name: "VoiceMeeter Output (VB-Audio VoiceMeeter VAIO)", maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(9);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(9);
   });
 
   it("finds a VoiceMeeter VAIO device", () => {
     mockDevices.push({ id: 13, name: "VoiceMeeter VAIO3 Output (VB-Audio VoiceMeeter VAIO3)", maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(13);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(13);
   });
 
   it("finds a generic device with 'loopback' in its name", () => {
     mockDevices.push({ id: 12, name: "Loopback Audio Device", maxInputChannels: 2 });
-    expect(findLoopbackDevice(mockPortAudio)?.id).toBe(12);
+    expect(findLoopbackDevice(mockPortAudio)?.device.id).toBe(12);
   });
 });
 
