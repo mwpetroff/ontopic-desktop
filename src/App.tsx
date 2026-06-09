@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -102,6 +102,7 @@ function AuthenticatedApp() {
 
 function AppContent() {
   const { isLoading, isAuthenticated } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -111,7 +112,9 @@ function AppContent() {
     );
   }
 
-  if (!isAuthenticated) {
+  // Show the branded landing page full-screen (no sidebar) when unauthenticated
+  // or when the user is at the root "/" or "/welcome" path.
+  if (!isAuthenticated || location === "/" || location === "/welcome") {
     return <Landing />;
   }
 
