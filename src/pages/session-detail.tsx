@@ -14,9 +14,10 @@ import { SentimentBadge } from "@/components/sentiment-indicator";
 import { SentimentEqualizerFull } from "@/components/sentiment-equalizer";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
-import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload } from "lucide-react";
+import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload, FileJson } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
-import { exportSessionPdf } from "@/lib/export-pdf";
+import { exportSessionPdf, exportSessionJson } from "@/lib/export-pdf";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/use-sessions";
@@ -173,15 +174,25 @@ export default function SessionDetail() {
                   Session Map
                 </Button>
               </Link>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => exportSessionPdf(session)}
-                data-testid="button-export-pdf"
-              >
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                Export PDF
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-8" data-testid="button-export">
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    Export
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportSessionPdf(session)} data-testid="button-export-pdf">
+                    <FileText className="h-3.5 w-3.5 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportSessionJson(session)} data-testid="button-export-json">
+                    <FileJson className="h-3.5 w-3.5 mr-2" />
+                    Export JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

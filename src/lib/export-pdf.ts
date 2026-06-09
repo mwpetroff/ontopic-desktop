@@ -342,3 +342,14 @@ export function exportSessionPdf(session: SessionWithTopics) {
   const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   doc.save(`${slug}-notes.pdf`);
 }
+
+export function exportSessionJson(session: SessionWithTopics) {
+  const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${slug}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
