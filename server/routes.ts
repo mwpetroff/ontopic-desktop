@@ -463,6 +463,11 @@ export async function registerRoutes(
     clientName: z.string().nullable().optional(),
     industry: z.string().nullable().optional(),
     status: z.enum(["active", "completed"]).optional(),
+    speakers: z.array(z.object({
+      name: z.string(),
+      title: z.string().optional(),
+      role: z.enum(["host", "guest"]).optional(),
+    })).optional(),
   });
 
   app.patch("/api/sessions/:id", async (req, res) => {
@@ -513,6 +518,16 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating summary:", error);
       res.status(500).json({ error: "Failed to generate summary" });
+    }
+  });
+
+  app.delete("/api/sessions", async (req, res) => {
+    try {
+      const count = await storage.deleteAllSessions();
+      res.json({ deleted: count });
+    } catch (error) {
+      console.error("Error deleting all sessions:", error);
+      res.status(500).json({ error: "Failed to delete sessions" });
     }
   });
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useSettings, useUpdateSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Settings, Mic, ClipboardList, Briefcase, Cpu, Bot, LinkIcon, Plus, X, TrendingUp, ChevronDown, Key, AlertCircle, CheckCircle2, RefreshCw, Trash2 } from "lucide-react";
 import { MicTestWidget } from "@/components/mic-test-widget";
 
 const HOST_ROLES = [
@@ -86,6 +89,17 @@ export default function StudioSettings() {
   const isAERole = currentRole === "account-executive";
 
   const [newUrl, setNewUrl] = useState("");
+
+  const deleteAllSessionsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/sessions");
+      return res.json() as Promise<{ deleted: number }>;
+    },
+    onSuccess: ({ deleted }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sessions"] });
+      toast({ title: "Session data cleared", description: `${deleted} session${deleted !== 1 ? "s" : ""} deleted.` });
+    },
+  });
 
   // OpenAI API key — in Electron: electron-store via IPC; in browser: server API.
   const isElectron = !!window.electronAudio;
@@ -479,6 +493,42 @@ export default function StudioSettings() {
               </Button>
             </div>
           )}
+
+          <div className="border-t border-border pt-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Trash2 className="h-4 w-4 text-destructive" />
+              <h2 className="text-sm font-semibold">Data</h2>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Permanently delete all session recordings, transcripts, and analysis results. This cannot be undone — use it to reset before a demo or start fresh.
+            </p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" data-testid="button-reset-session-data">
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Reset Session Data
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all sessions?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all sessions, transcripts, topics, and analysis results. Your settings, voice profiles, partners, and competencies will not be affected.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => deleteAllSessionsMutation.mutate()}
+                    data-testid="button-confirm-reset"
+                  >
+                    Delete All Sessions
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
 
           <div className="border-t border-border pt-4">
             <h2 className="text-sm font-semibold mb-1">How Roles Work</h2>

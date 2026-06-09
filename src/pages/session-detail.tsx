@@ -14,7 +14,8 @@ import { SentimentBadge } from "@/components/sentiment-indicator";
 import { SentimentEqualizerFull } from "@/components/sentiment-equalizer";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
-import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload, FileJson } from "lucide-react";
+import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload, FileJson, Pencil, Check, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { exportSessionPdf, exportSessionJson } from "@/lib/export-pdf";
@@ -94,6 +95,29 @@ export default function SessionDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/sessions", sessionId] });
     },
   });
+
+  const [editingSpeaker, setEditingSpeaker] = useState<{ index: number; name: string } | null>(null);
+
+  const renameSpeakerMutation = useMutation({
+    mutationFn: async (speakers: SpeakerEntry[]) => {
+      const res = await apiRequest("PATCH", `/api/sessions/${sessionId}`, { speakers });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sessions", sessionId] });
+      setEditingSpeaker(null);
+    },
+  });
+
+  function commitRename() {
+    if (!editingSpeaker || !session) return;
+    const name = editingSpeaker.name.trim();
+    if (!name) { setEditingSpeaker(null); return; }
+    const updated = (session.speakers as SpeakerEntry[] || []).map((s, i) =>
+      i === editingSpeaker.index ? { ...s, name } : s
+    );
+    renameSpeakerMutation.mutate(updated);
+  }
 
   const autoGenerateTriggered = useRef(false);
   useEffect(() => {
@@ -450,14 +474,31 @@ export default function SessionDetail() {
                               {hosts.map((s) => {
                                 const originalIndex = sessionSpeakers.indexOf(s);
                                 const color = getSpeakerColorByIndex(originalIndex);
+                                const isEditing = editingSpeaker?.index === originalIndex;
                                 return (
-                                  <Card key={originalIndex} className="p-3 border-primary/20" data-testid={`speaker-entry-${originalIndex}`}>
-                                    <div className="flex items-baseline gap-2">
-                                      <span className={`text-sm font-medium ${color.text}`} data-testid={`speaker-name-${originalIndex}`}>{s.name}</span>
-                                      {s.title && (
-                                        <span className="text-xs text-muted-foreground" data-testid={`speaker-title-${originalIndex}`}>{s.title}</span>
+                                  <Card key={originalIndex} className="p-3 border-primary/20 group" data-testid={`speaker-entry-${originalIndex}`}>
+                                    <div className="flex items-center gap-2">
+                                      {isEditing ? (
+                                        <>
+                                          <Input
+                                            autoFocus
+                                            className="h-7 text-sm"
+                                            value={editingSpeaker.name}
+                                            onChange={e => setEditingSpeaker({ index: originalIndex, name: e.target.value })}
+                                            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditingSpeaker(null); }}
+                                            data-testid={`input-rename-speaker-${originalIndex}`}
+                                          />
+                                          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={commitRename}><Check className="h-3.5 w-3.5 text-primary" /></Button>
+                                          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingSpeaker(null)}><X className="h-3.5 w-3.5 text-muted-foreground" /></Button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className={`text-sm font-medium ${color.text}`} data-testid={`speaker-name-${originalIndex}`}>{s.name}</span>
+                                          {s.title && <span className="text-xs text-muted-foreground" data-testid={`speaker-title-${originalIndex}`}>{s.title}</span>}
+                                          <Badge variant="outline" className="text-[8px] h-3.5 px-1 border-primary/40 text-primary ml-auto">Host</Badge>
+                                          <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0" onClick={() => setEditingSpeaker({ index: originalIndex, name: s.name })} data-testid={`button-rename-speaker-${originalIndex}`}><Pencil className="h-3 w-3 text-muted-foreground" /></Button>
+                                        </>
                                       )}
-                                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 border-primary/40 text-primary ml-auto">Host</Badge>
                                     </div>
                                   </Card>
                                 );
@@ -475,12 +516,29 @@ export default function SessionDetail() {
                               {guests.map((s) => {
                                 const originalIndex = sessionSpeakers.indexOf(s);
                                 const color = getSpeakerColorByIndex(originalIndex);
+                                const isEditing = editingSpeaker?.index === originalIndex;
                                 return (
-                                  <Card key={originalIndex} className="p-3" data-testid={`speaker-entry-${originalIndex}`}>
-                                    <div className="flex items-baseline gap-2">
-                                      <span className={`text-sm font-medium ${color.text}`} data-testid={`speaker-name-${originalIndex}`}>{s.name}</span>
-                                      {s.title && (
-                                        <span className="text-xs text-muted-foreground" data-testid={`speaker-title-${originalIndex}`}>{s.title}</span>
+                                  <Card key={originalIndex} className="p-3 group" data-testid={`speaker-entry-${originalIndex}`}>
+                                    <div className="flex items-center gap-2">
+                                      {isEditing ? (
+                                        <>
+                                          <Input
+                                            autoFocus
+                                            className="h-7 text-sm"
+                                            value={editingSpeaker.name}
+                                            onChange={e => setEditingSpeaker({ index: originalIndex, name: e.target.value })}
+                                            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setEditingSpeaker(null); }}
+                                            data-testid={`input-rename-speaker-${originalIndex}`}
+                                          />
+                                          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={commitRename}><Check className="h-3.5 w-3.5 text-primary" /></Button>
+                                          <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setEditingSpeaker(null)}><X className="h-3.5 w-3.5 text-muted-foreground" /></Button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className={`text-sm font-medium ${color.text}`} data-testid={`speaker-name-${originalIndex}`}>{s.name}</span>
+                                          {s.title && <span className="text-xs text-muted-foreground" data-testid={`speaker-title-${originalIndex}`}>{s.title}</span>}
+                                          <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 ml-auto shrink-0" onClick={() => setEditingSpeaker({ index: originalIndex, name: s.name })} data-testid={`button-rename-speaker-${originalIndex}`}><Pencil className="h-3 w-3 text-muted-foreground" /></Button>
+                                        </>
                                       )}
                                     </div>
                                   </Card>

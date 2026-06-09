@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    environmentMatchGlobs: [
+      ["tests/**/*.browser.test.ts", "jsdom"],
+    ],
     include: ["tests/**/*.test.ts"],
     testTimeout: 30000,
     setupFiles: ["./tests/setup.ts"],

@@ -12,6 +12,7 @@ export interface IStorage {
   getAllSessions(limit?: number, offset?: number): Promise<Session[]>;
   updateSession(id: number, data: Partial<Session>): Promise<Session | undefined>;
   deleteSession(id: number): Promise<void>;
+  deleteAllSessions(): Promise<number>;
   endSession(id: number): Promise<Session | undefined>;
 
   createTopic(data: InsertTopic): Promise<Topic>;
@@ -83,6 +84,12 @@ export class DatabaseStorage implements IStorage {
   async deleteSession(id: number): Promise<void> {
     await db.delete(topics).where(eq(topics.sessionId, id));
     await db.delete(sessions).where(eq(sessions.id, id));
+  }
+
+  async deleteAllSessions(): Promise<number> {
+    await db.delete(topics);
+    const deleted = await db.delete(sessions).returning({ id: sessions.id });
+    return deleted.length;
   }
 
   async endSession(id: number): Promise<Session | undefined> {
