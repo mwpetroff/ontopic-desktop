@@ -36,6 +36,16 @@ import type { Session, Topic, VoiceProfile, SentimentEntry, ActionItem, FollowUp
 import { consolidateSimilarProjects } from "@shared/schema";
 import { useSettings } from "@/hooks/use-settings";
 
+async function pollAnalysisJob(sessionId: number, jobId: string): Promise<unknown> {
+  for (;;) {
+    await new Promise(r => setTimeout(r, 800));
+    const res = await apiRequest("GET", `/api/sessions/${sessionId}/jobs/${jobId}`);
+    const job = await res.json() as { status: string; result?: unknown; error?: string };
+    if (job.status === "done") return job.result;
+    if (job.status === "error") throw new Error(job.error || "Analysis failed");
+  }
+}
+
 const DEMO_REFERENCE_PROJECTS = [
   {
     title: "Contoso Cloud Lift & Shift",
@@ -563,8 +573,9 @@ export default function Dashboard() {
         } : {}),
       });
 
-      const data = await res.json();
-      await handleAnalysisResponseRef.current(data);
+      const { jobId } = await res.json() as { jobId: string };
+      const data = await pollAnalysisJob(session.id, jobId);
+      await handleAnalysisResponseRef.current(data as any);
     } catch (error) {
       console.error("Failed to analyze audio:", error);
       const rawMsg = error instanceof Error ? error.message : String(error);
@@ -671,21 +682,21 @@ export default function Dashboard() {
     if (!isDemoRunningRef.current) return;
 
     try {
-      const [res] = await Promise.all([
+      const [{ jobId }] = await Promise.all([
         apiRequest("POST", `/api/sessions/${session.id}/demo-analyze`, {
           text: chunk,
           speaker,
           features: { actionItems: true, followUpQuestions: true, similarProjects: true },
-        }),
+        }).then(r => r.json() as Promise<{ jobId: string }>),
         audioEnded,
       ]);
 
       if (!isDemoRunningRef.current) return;
 
-      const data = await res.json();
+      const data = await pollAnalysisJob(session.id, jobId);
       // Transcript was already streamed word-by-word; suppress the duplicate from the API response.
       // If no audio was available, let handleAnalysisResponse write the transcript normally.
-      await handleAnalysisResponse(hasAudio ? { ...data, transcript: undefined } : data);
+      await handleAnalysisResponse(hasAudio ? { ...(data as any), transcript: undefined } : (data as any));
 
       setIsProcessing(false);
       const nextIdx = chunkIdx + 1;

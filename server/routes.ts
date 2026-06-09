@@ -44,6 +44,28 @@ function checkAnalyzeRateLimit(sessionId: number): boolean {
   return true;
 }
 
+// ─── Analysis job store (A-07) ───────────────────────────────────────────────
+// /analyze and /demo-analyze return 202 immediately; clients poll until done.
+interface AnalysisJob {
+  status: "pending" | "done" | "error";
+  result?: unknown;
+  error?: string;
+  createdAt: number;
+}
+const analysisJobs = new Map<string, AnalysisJob>();
+const JOB_TTL_MS = 5 * 60_000;
+
+function makeJobId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function sweepJobs(): void {
+  const cutoff = Date.now() - JOB_TTL_MS;
+  for (const [id, job] of analysisJobs) {
+    if (job.createdAt < cutoff) analysisJobs.delete(id);
+  }
+}
+
 // ─── Static prompt context cache (A-09) ──────────────────────────────────────
 // Partners, competencies, and reference projects are global and change rarely.
 // Cache them to avoid 3 DB reads + string rebuilds on every analyze call.
@@ -570,53 +592,72 @@ export async function registerRoutes(
       const appSettings = await storage.getSettings();
       const transcriptionModel = appSettings.transcriptionModel || "gpt-4o-mini-transcribe";
 
-      const rawBuffer = Buffer.from(audio, "base64");
-      const detectedFormat = detectAudioFormat(rawBuffer);
-      const formatExt = detectedFormat === "unknown" ? "webm" : detectedFormat;
+      sweepJobs();
+      const jobId = makeJobId();
+      const job: AnalysisJob = { status: "pending", createdAt: Date.now() };
+      analysisJobs.set(jobId, job);
+      res.status(202).json({ jobId });
 
-      const file = await toFile(rawBuffer, `audio.${formatExt}`);
-      const transcription = await withRetry(
-        () => openai.audio.transcriptions.create({ file, model: transcriptionModel }),
-        { label: `transcribe(session=${sessionId})` }
-      );
+      // Transcription + analysis run in the background; client polls for completion.
+      const voiceMatchBody = req.body.voiceMatch;
+      const audioB64 = audio as string;
+      (async () => {
+        try {
+          const rawBuffer = Buffer.from(audioB64, "base64");
+          const detectedFormat = detectAudioFormat(rawBuffer);
+          const formatExt = detectedFormat === "unknown" ? "webm" : detectedFormat;
+          const file = await toFile(rawBuffer, `audio.${formatExt}`);
+          const transcription = await withRetry(
+            () => openai.audio.transcriptions.create({ file, model: transcriptionModel }),
+            { label: `transcribe(session=${sessionId})` }
+          );
+          const transcriptText = transcription.text.trim();
 
-      const transcriptText = transcription.text.trim();
+          if (!transcriptText || transcriptText.length < 3) {
+            job.status = "done";
+            job.result = { transcript: "", topics: [], newTopics: [] };
+            return;
+          }
 
-      if (!transcriptText || transcriptText.length < 3) {
-        return res.json({ transcript: "", topics: [], newTopics: [] });
-      }
+          await storage.updateSession(sessionId, {
+            transcript: session.transcript ? session.transcript + " " + transcriptText : transcriptText,
+          });
 
-      await storage.updateSession(sessionId, {
-        transcript: session.transcript ? session.transcript + " " + transcriptText : transcriptText,
-      });
+          let voiceMatch: VoiceMatchHint | undefined;
+          if (voiceMatchBody) {
+            const vm = voiceMatchBody;
+            const confidence = Number(vm.confidence);
+            if (
+              typeof vm.name === "string" && vm.name.trim().length > 0 &&
+              Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
+            ) {
+              voiceMatch = {
+                name: vm.name.trim(),
+                title: typeof vm.title === "string" && vm.title.trim() ? vm.title.trim() : undefined,
+                confidence,
+              };
+            }
+          }
 
-      let voiceMatch: VoiceMatchHint | undefined;
-      if (req.body.voiceMatch) {
-        const vm = req.body.voiceMatch;
-        const confidence = Number(vm.confidence);
-        if (
-          typeof vm.name === "string" && vm.name.trim().length > 0 &&
-          Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
-        ) {
-          voiceMatch = {
-            name: vm.name.trim(),
-            title: typeof vm.title === "string" && vm.title.trim() ? vm.title.trim() : undefined,
-            confidence,
-          };
+          const result = await enqueueForSession(sessionId, () =>
+            processAnalysis(sessionId, transcriptText, session, features, voiceMatch)
+          );
+          job.status = "done";
+          job.result = result;
+        } catch (error) {
+          console.error("Error analyzing audio:", error);
+          const msg = error instanceof Error ? error.message : String(error);
+          job.status = "error";
+          const isAuthError = msg.includes("401") || msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("authentication") || msg.toLowerCase().includes("incorrect api key");
+          job.error = isAuthError
+            ? "401: OpenAI API key is missing or invalid. Set OPENAI_API_KEY in your .env file or via Settings."
+            : msg;
         }
-      }
-      const result = await enqueueForSession(sessionId, () =>
-        processAnalysis(sessionId, transcriptText, session, features, voiceMatch)
-      );
-      res.json(result);
+      })();
 
     } catch (error) {
       console.error("Error analyzing audio:", error);
       const msg = error instanceof Error ? error.message : String(error);
-      const isAuthError = msg.includes("401") || msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("authentication") || msg.toLowerCase().includes("incorrect api key");
-      if (isAuthError) {
-        return res.status(401).json({ error: "OpenAI API key is missing or invalid. Set OPENAI_API_KEY in your .env file or via Settings.", detail: msg });
-      }
       res.status(500).json({ error: "Failed to analyze audio", detail: msg });
     }
   });
@@ -647,26 +688,52 @@ export async function registerRoutes(
       const session = await storage.getSession(sessionId);
       if (!session) return res.status(404).json({ error: "Session not found" });
 
-      await storage.updateSession(sessionId, {
-        transcript: session.transcript ? session.transcript + " " + text : text,
-      });
+      sweepJobs();
+      const jobId = makeJobId();
+      const job: AnalysisJob = { status: "pending", createdAt: Date.now() };
+      analysisJobs.set(jobId, job);
+      res.status(202).json({ jobId });
 
-      // Use the explicit speaker name as a high-confidence voiceMatch so
-      // resolveSpeaker bypasses AI detection for demo chunks.
-      const demoVoiceMatch = explicitSpeaker
-        ? { name: String(explicitSpeaker), confidence: 1.0 }
-        : undefined;
+      const chunkText = text as string;
+      const speakerName = explicitSpeaker ? String(explicitSpeaker) : undefined;
+      (async () => {
+        try {
+          await storage.updateSession(sessionId, {
+            transcript: session.transcript ? session.transcript + " " + chunkText : chunkText,
+          });
 
-      const result = await enqueueForSession(sessionId, () =>
-        processAnalysis(sessionId, text, session, features, demoVoiceMatch)
-      );
-      res.json(result);
+          const demoVoiceMatch = speakerName
+            ? { name: speakerName, confidence: 1.0 }
+            : undefined;
+
+          const result = await enqueueForSession(sessionId, () =>
+            processAnalysis(sessionId, chunkText, session, features, demoVoiceMatch)
+          );
+          job.status = "done";
+          job.result = result;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error("Error in demo analysis:", error);
+          job.status = "error";
+          const isAuthError = msg.includes("401") || msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("authentication") || msg.toLowerCase().includes("incorrect api key");
+          job.error = isAuthError ? "401: OpenAI API key is missing or invalid." : msg;
+        }
+      })();
 
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error("Error in demo analysis:", error);
       res.status(500).json({ error: "Failed to analyze demo text", detail: msg });
     }
+  });
+
+  // ─── Analysis job polling (A-07) ─────────────────────────────────────────────
+  app.get("/api/sessions/:id/jobs/:jobId", (req, res) => {
+    const job = analysisJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ error: "Job not found or expired" });
+    if (job.status === "pending") return res.json({ status: "pending" });
+    if (job.status === "done") return res.json({ status: "done", result: job.result });
+    return res.json({ status: "error", error: job.error });
   });
 
   app.get("/api/voice-profiles", async (_req, res) => {
