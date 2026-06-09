@@ -649,14 +649,17 @@ export default function Dashboard() {
     audio.playbackRate = 1.12;
     audio.play().catch(() => {});
 
-    // Stream transcript words in sync with the audio duration.
-    // Words appear slightly after audio starts (0.5 s delay) so voice is "ahead".
+    // Stream transcript words in sync with audio. When no audio file is available
+    // (sa-demo-*, ba-demo-*, pm-demo-* not yet shipped), fall back to ~100 ms/word
+    // so the transcript still streams visibly instead of appearing frozen.
     const words = chunk.split(/\s+/);
     const chunkPrefix = `[${speaker}] `;
-    const msPerWord = audioDuration > 0 ? (audioDuration * 1000) / (words.length * 1.12) : 0;
-    const hasAudio = msPerWord > 0;
+    const hasAudio = audioDuration > 0;
+    const msPerWord = hasAudio
+      ? (audioDuration * 1000) / (words.length * 1.12)
+      : Math.max(60, 2200 / Math.max(1, words.length)); // pace to ~match GPT latency
 
-    if (hasAudio) {
+    {
       let streamIdx = 0;
       const streamWord = () => {
         if (!isDemoRunningRef.current) return;
@@ -676,11 +679,14 @@ export default function Dashboard() {
           demoWordTimerRef.current = setTimeout(streamWord, msPerWord);
         }
       };
-      demoWordTimerRef.current = setTimeout(streamWord, 500);
+      // With audio: start words 0.5 s after audio begins (voice is "ahead").
+      // Without audio: start words immediately.
+      demoWordTimerRef.current = setTimeout(streamWord, hasAudio ? 500 : 0);
     }
 
-    // Send to analysis 1.5 s after audio starts (audio is "ahead" of AI processing)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Wait before firing analysis: with audio, give it 1.5 s head-start so the
+    // voice is ahead of the AI. Without audio there is nothing to sync to.
+    await new Promise(resolve => setTimeout(resolve, hasAudio ? 1500 : 200));
 
     if (!isDemoRunningRef.current) return;
 
@@ -697,9 +703,9 @@ export default function Dashboard() {
       if (!isDemoRunningRef.current) return;
 
       const data = await pollAnalysisJob(session.id, jobId);
-      // Transcript was already streamed word-by-word; suppress the duplicate from the API response.
-      // If no audio was available, let handleAnalysisResponse write the transcript normally.
-      await handleAnalysisResponse(hasAudio ? { ...(data as any), transcript: undefined } : (data as any));
+      // Always suppress transcript from the API response — it's streamed word-by-word above
+      // (either synced to audio or at a fixed fallback rate when audio files are absent).
+      await handleAnalysisResponse({ ...(data as any), transcript: undefined });
 
       setIsProcessing(false);
       const nextIdx = chunkIdx + 1;
