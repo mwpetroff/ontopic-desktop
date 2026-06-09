@@ -20,6 +20,7 @@
   const { runSetupWizardIfNeeded, runSetupWizard } = require("./setup-wizard");
 
   const isDev = process.env.NODE_ENV === "development";
+  const SERVER_PORT = parseInt(process.env.ONTOPIC_PORT || "3000", 10);
 
   // Returns the OS-appropriate app-data directory root (no "OnTopic" suffix).
   function getAppDataDir() {
@@ -131,7 +132,7 @@
       env: {
         ...process.env,
         NODE_ENV: isDev ? "development" : "production",
-        PORT: "3000",
+        PORT: String(SERVER_PORT),
         ELECTRON: "true",
         OPENAI_API_KEY: apiKey,
         SERVER_LOG_PATH: logPath,
@@ -157,7 +158,7 @@
       }
     });
 
-    console.log("[main] Express server starting on port 3000");
+    console.log(`[main] Express server starting on port ${SERVER_PORT}`);
   }
 
   // ─── Window ──────────────────────────────────────────────────────────────────
@@ -455,7 +456,7 @@
       "script-src 'self' 'unsafe-eval' 'unsafe-inline' http://localhost:5173",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob:",
-      "connect-src 'self' http://localhost:3000 ws://localhost:3000 http://localhost:5173 ws://localhost:5173 https://api.openai.com",
+      `connect-src 'self' http://localhost:${SERVER_PORT} ws://localhost:${SERVER_PORT} http://localhost:5173 ws://localhost:5173 https://api.openai.com`,
       "font-src 'self' data: https://fonts.gstatic.com",
     ].join("; ");
     const prodCSP = [
@@ -477,22 +478,22 @@
 
     const s = await getStore();
 
-    // Kill any stale process that's already holding port 3000 (e.g. a leftover
+    // Kill any stale process that's already holding the server port (e.g. a leftover
     // server from a previous crashed session) before trying to spawn a new one.
-    if (await isPortInUse(3000)) {
-      console.log("[main] Port 3000 is already in use — attempting to clear it...");
-      await killProcessOnPort(3000);
-      if (await isPortInUse(3000)) {
-        console.warn("[main] Port 3000 still in use after kill attempt — server may fail to start.");
+    if (await isPortInUse(SERVER_PORT)) {
+      console.log(`[main] Port ${SERVER_PORT} is already in use — attempting to clear it...`);
+      await killProcessOnPort(SERVER_PORT);
+      if (await isPortInUse(SERVER_PORT)) {
+        console.warn(`[main] Port ${SERVER_PORT} still in use after kill attempt — server may fail to start.`);
       } else {
-        console.log("[main] Port 3000 cleared successfully.");
+        console.log(`[main] Port ${SERVER_PORT} cleared successfully.`);
       }
     }
 
     await startServer();
     createTray();
     try {
-      await waitForPort(3000);
+      await waitForPort(SERVER_PORT);
     } catch (err) {
       console.error("[main] Server did not start in time:", err.message);
     }
