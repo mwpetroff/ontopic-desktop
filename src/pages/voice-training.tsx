@@ -19,6 +19,9 @@ import {
   CheckCircle,
   Shield,
   Volume2,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldQuestion,
 } from "lucide-react";
 import type { VoiceProfile } from "@shared/schema";
 
@@ -29,6 +32,19 @@ const TRAINING_PHRASES = [
   "We need to evaluate the security posture of the application.",
   "The CI/CD pipeline needs optimization for faster deployments.",
 ];
+
+function profileReliability(sampleCount: number): {
+  label: string;
+  className: string;
+  Icon: typeof ShieldQuestion;
+  title: string;
+} {
+  if (sampleCount === 0) return { label: "Untrained", className: "text-muted-foreground", Icon: ShieldQuestion, title: "No samples recorded — voice matching is disabled for this profile." };
+  if (sampleCount < 3) return { label: "Low", className: "text-red-500 dark:text-red-400", Icon: ShieldAlert, title: `${sampleCount} sample${sampleCount > 1 ? "s" : ""} — record at least 3 for reliable matching.` };
+  if (sampleCount < 6) return { label: "Fair", className: "text-amber-500 dark:text-amber-400", Icon: ShieldAlert, title: `${sampleCount} samples — accuracy improves with more recordings.` };
+  if (sampleCount < 10) return { label: "Good", className: "text-emerald-500 dark:text-emerald-400", Icon: ShieldCheck, title: `${sampleCount} samples — reasonably accurate.` };
+  return { label: "Excellent", className: "text-emerald-600 dark:text-emerald-400", Icon: ShieldCheck, title: `${sampleCount} samples — high accuracy.` };
+}
 
 export default function VoiceTraining() {
   const [profileName, setProfileName] = useState("My Voice");
@@ -281,8 +297,17 @@ export default function VoiceTraining() {
                       <h4 className="text-sm font-medium truncate">{profile.name}</h4>
                       <p className="text-xs text-muted-foreground">
                         {profile.title && <span>{profile.title} · </span>}
-                        {profile.sampleCount} samples
+                        {profile.sampleCount} sample{profile.sampleCount !== 1 ? "s" : ""}
                       </p>
+                      {(() => {
+                        const { label, className, Icon, title } = profileReliability(profile.sampleCount);
+                        return (
+                          <div className={`flex items-center gap-1 mt-0.5 text-[10px] font-medium ${className}`} title={title} data-testid={`profile-reliability-${profile.id}`}>
+                            <Icon className="h-3 w-3" />
+                            {label}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {profile.isActive ? (
