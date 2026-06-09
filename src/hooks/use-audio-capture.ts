@@ -43,6 +43,42 @@ declare global {
   }
 }
 
+// ── FFT via OfflineAudioContext ───────────────────────────────────────────────
+// Computes a real frequency spectrum from raw 16-bit LE PCM using the last
+// `fftSize` samples of the buffer (a 16ms window at 16 kHz is sufficient for
+// visualisation; rendering a tiny offline context takes ~1 ms).
+async function computePcmFFT(pcmBuffer: ArrayBuffer, numBins = 128): Promise<Float32Array> {
+  const fftSize = numBins * 2; // frequencyBinCount = fftSize / 2
+  const totalSamples = Math.floor(pcmBuffer.byteLength / 2); // 16-bit = 2 bytes/sample
+  if (totalSamples < fftSize) {
+    return new Float32Array(numBins).fill(-100);
+  }
+
+  const startByte = (totalSamples - fftSize) * 2;
+  const offlineCtx = new OfflineAudioContext(1, fftSize, 16000);
+  const analyser = offlineCtx.createAnalyser();
+  analyser.fftSize = fftSize;
+  analyser.smoothingTimeConstant = 0;
+
+  const audioBuffer = offlineCtx.createBuffer(1, fftSize, 16000);
+  const channelData = audioBuffer.getChannelData(0);
+  const view = new DataView(pcmBuffer, startByte, fftSize * 2);
+  for (let i = 0; i < fftSize; i++) {
+    channelData[i] = view.getInt16(i * 2, true) / 32768;
+  }
+
+  const source = offlineCtx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(analyser);
+  analyser.connect(offlineCtx.destination);
+  source.start(0);
+  await offlineCtx.startRendering();
+
+  const freqData = new Float32Array(analyser.frequencyBinCount);
+  analyser.getFloatFrequencyData(freqData);
+  return freqData;
+}
+
 // ── WAV encoding ──────────────────────────────────────────────────────────────
 
 /**
@@ -118,6 +154,9 @@ export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOp
   const unsubStatusRef = useRef<(() => void) | null>(null);
   const unsubErrorRef  = useRef<(() => void) | null>(null);
 
+  // Track the previous deviceId so we can detect changes for hot-swap (A-21).
+  const prevDeviceIdRef = useRef<number | undefined>(deviceId);
+
   useEffect(() => {
     const electron = window.electronAudio;
     if (!electron) return; // Running in plain browser — no-op
@@ -131,10 +170,10 @@ export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOp
       const level = rmsLevel(buffer);
       setAudioLevel(level);
 
-      // Feed frequency visualizer if requested (synthesise a flat spectrum from RMS)
       if (onFrequencyData) {
-        const fakeFreq = new Float32Array(128).fill(-100 + level * 100);
-        onFrequencyData(fakeFreq);
+        computePcmFFT(buffer).then(onFrequencyData).catch(() => {
+          onFrequencyData(new Float32Array(128).fill(-100));
+        });
       }
 
       if (chunkCallbackRef.current) {
@@ -166,6 +205,20 @@ export function useAudioCapture({ deviceId, onFrequencyData }: UseAudioCaptureOp
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A-21: hot-swap the mic device when deviceId changes during active capture.
+  useEffect(() => {
+    const prev = prevDeviceIdRef.current;
+    prevDeviceIdRef.current = deviceId;
+    if (prev === deviceId) return; // no change
+    if (!isCapturing) return;
+    if (!window.electronAudio) return;
+    window.electronAudio.stopCapture().then(() =>
+      window.electronAudio!.startCapture(deviceId !== undefined ? { micDeviceId: deviceId } : undefined)
+    ).catch((err) => {
+      console.warn("[useAudioCapture] device hot-swap failed:", err);
+    });
+  }, [deviceId, isCapturing]);
 
   const startCapture = useCallback(async (callback: (blob: Blob) => void) => {
     if (!window.electronAudio) throw new Error("Electron audio not available");
