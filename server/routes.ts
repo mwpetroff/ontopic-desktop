@@ -245,6 +245,47 @@ export async function registerRoutes(
     }
   });
 
+  // ─── API Key (browser mode) ───────────────────────────────────────────────
+  // In Electron mode the key is managed via IPC (electron-store + process restart).
+  // In browser/standalone mode these endpoints let the UI read/write the key
+  // against process.env at runtime and persist it to the .env file.
+
+  app.get("/api/settings/api-key", (_req, res) => {
+    const key = process.env.OPENAI_API_KEY || "";
+    const configured = key.length > 0 && key !== "not-configured";
+    res.json({
+      configured,
+      masked: configured ? `${key.slice(0, 7)}…${key.slice(-4)}` : null,
+    });
+  });
+
+  app.post("/api/settings/api-key", (req, res) => {
+    const { key } = req.body as { key?: string };
+    if (!key || typeof key !== "string" || !key.trim()) {
+      return res.status(400).json({ error: "key is required" });
+    }
+    const trimmed = key.trim();
+    process.env.OPENAI_API_KEY = trimmed;
+
+    // Persist to the .env file at the project root so it survives restarts.
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      const envPath = path.resolve(__dirname, "../.env");
+      let contents = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+      if (/^OPENAI_API_KEY=.*/m.test(contents)) {
+        contents = contents.replace(/^OPENAI_API_KEY=.*/m, `OPENAI_API_KEY=${trimmed}`);
+      } else {
+        contents = contents.trimEnd() + (contents.length ? "\n" : "") + `OPENAI_API_KEY=${trimmed}\n`;
+      }
+      fs.writeFileSync(envPath, contents, "utf8");
+    } catch (err: any) {
+      console.warn("[routes] Could not write .env file:", err.message);
+    }
+
+    res.json({ ok: true });
+  });
+
   app.get("/api/sessions", async (_req, res) => {
     try {
       const sessions = await storage.getAllSessions();
@@ -398,7 +439,7 @@ export async function registerRoutes(
       }
 
       if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "not-configured") {
-        return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Studio Settings." });
+        return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Settings." });
       }
 
       const session = await storage.getSession(sessionId);
@@ -456,7 +497,7 @@ export async function registerRoutes(
       const msg = error instanceof Error ? error.message : String(error);
       const isAuthError = msg.includes("401") || msg.toLowerCase().includes("api key") || msg.toLowerCase().includes("authentication") || msg.toLowerCase().includes("incorrect api key");
       if (isAuthError) {
-        return res.status(401).json({ error: "OpenAI API key is missing or invalid. Set OPENAI_API_KEY in your .env file or via Studio Settings.", detail: msg });
+        return res.status(401).json({ error: "OpenAI API key is missing or invalid. Set OPENAI_API_KEY in your .env file or via Settings.", detail: msg });
       }
       res.status(500).json({ error: "Failed to analyze audio", detail: msg });
     }
@@ -465,14 +506,14 @@ export async function registerRoutes(
   app.post("/api/sessions/:id/demo-analyze", async (req, res) => {
     try {
       const sessionId = parseInt(req.params.id);
-      const { text } = req.body;
+      const { text, speaker: explicitSpeaker } = req.body;
 
       if (!text) {
         return res.status(400).json({ error: "Text is required" });
       }
 
       if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "not-configured") {
-        return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Studio Settings." });
+        return res.status(401).json({ error: "OpenAI API key is not configured. Please add it in Settings." });
       }
 
       const features: FeatureFlags = {
@@ -488,7 +529,13 @@ export async function registerRoutes(
         transcript: session.transcript ? session.transcript + " " + text : text,
       });
 
-      const result = await processAnalysis(sessionId, text, session, features);
+      // Use the explicit speaker name as a high-confidence voiceMatch so
+      // resolveSpeaker bypasses AI detection for demo chunks.
+      const demoVoiceMatch = explicitSpeaker
+        ? { name: String(explicitSpeaker), confidence: 1.0 }
+        : undefined;
+
+      const result = await processAnalysis(sessionId, text, session, features, demoVoiceMatch);
       res.json(result);
 
     } catch (error) {
@@ -746,7 +793,7 @@ export async function registerRoutes(
       }
 
       const response = await fetch(url, {
-        headers: { "User-Agent": "OnTopic/1.0 (Competency Scraper)" },
+        headers: { "User-Agent": "NRIOnTopic/1.0 (Competency Scraper)" },
         signal: AbortSignal.timeout(15000),
       });
       if (!response.ok) {
@@ -1000,7 +1047,7 @@ Be specific and practical. Extract 5-20 items. Focus on technology and IT-relate
       }
 
       const response = await fetch(url, {
-        headers: { "User-Agent": "OnTopic/1.0 (Case Study Scraper)" },
+        headers: { "User-Agent": "NRIOnTopic/1.0 (Case Study Scraper)" },
         signal: AbortSignal.timeout(15000),
       });
       if (!response.ok) {

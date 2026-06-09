@@ -1,20 +1,20 @@
 /**
- * Windows Speaker Loopback — Stereo Mix / WDM-KS
+ * Windows Speaker Loopback — WASAPI + Stereo Mix fallback
  *
- * Strategy: Windows exposes a "Stereo Mix" (or "What U Hear") capture device
- * via WDM-KS that mirrors everything being played through the default output.
- * This is the most reliable loopback approach with naudiodon/PortAudio on Windows
- * because it requires no special WASAPI flags and no custom native addon.
+ * Strategy (in priority order):
  *
- * Requirement: Stereo Mix must be enabled in Windows Sound settings.
- *   Right-click the speaker icon → Sounds → Recording tab
- *   → right-click in empty area → "Show Disabled Devices" → Enable "Stereo Mix"
+ * 1. WASAPI true loopback — open the default WASAPI output device as an input
+ *    stream.  PortAudio's WASAPI backend supports this natively on Windows 10+:
+ *    passing an output device ID to an input stream enables loopback capture
+ *    without any virtual audio cable or Stereo Mix requirement.
  *
- * The first-launch setup wizard guides the user through enabling it if not found.
+ * 2. Named loopback input device — look for Stereo Mix, VB-Audio Cable,
+ *    VoiceMeeter, BlackHole, etc.  Stereo Mix requires explicit enablement in
+ *    Windows Sound settings; the others require a driver install.
  *
  * Emits:
  *   "data"  — Buffer of raw 16-bit PCM samples at the configured sampleRate
- *   "error" — Error with a user-readable message if no loopback device is found
+ *   "error" — Error with a user-readable message if no loopback device can be opened
  */
 
 const { EventEmitter } = require("events");
@@ -40,21 +40,61 @@ const LOOPBACK_KEYWORDS = [
 ];
 
 /**
- * Find the best available loopback input device.
- * Returns the DeviceInfo object or null if none found.
+ * Find the best available loopback source.
  *
- * @param {object} [portAudio]  naudiodon instance; defaults to require("naudiodon").
+ * Returns { device, channelCount } where channelCount is the number of input
+ * channels to request (may come from maxOutputChannels for WASAPI loopback).
+ *
+ * @param {object} portAudio  naudiodon instance
  */
 function findLoopbackDevice(portAudio = require("naudiodon")) {
   const devices = portAudio.getDevices();
+
+  // ── Strategy 1: WASAPI true loopback ──────────────────────────────────────
+  // Open the default WASAPI output device as a loopback input.
+  // PortAudio's WASAPI backend (pa_win_wasapi.c) detects that the device is an
+  // output and automatically switches to loopback capture mode.
+  // Priority: default output first, then any WASAPI output.
+  const wasapiOutputs = devices.filter(
+    (d) => d.hostAPIName === "Windows WASAPI" && d.maxOutputChannels > 0
+  );
+
+  if (wasapiOutputs.length > 0) {
+    // Prefer the device marked as the WASAPI default output (isDefaultOutput).
+    // naudiodon / PortAudio sets defaultLowOutputLatency only on the default.
+    const preferred =
+      wasapiOutputs.find((d) => d.defaultLowOutputLatency > 0) ||
+      wasapiOutputs[0];
+    console.log(
+      `[WasapiLoopbackCapture] WASAPI loopback candidate: "${preferred.name}" ` +
+      `(id=${preferred.id}, outputCh=${preferred.maxOutputChannels})`
+    );
+    return { device: preferred, channelCount: Math.max(1, preferred.maxOutputChannels), mode: "wasapi-loopback" };
+  }
+
+  // ── Strategy 2: Named loopback/mix input device ────────────────────────────
   for (const keyword of LOOPBACK_KEYWORDS) {
     const match = devices.find(
-      (d) =>
-        d.maxInputChannels > 0 &&
-        d.name.toLowerCase().includes(keyword)
+      (d) => d.maxInputChannels > 0 && d.name.toLowerCase().includes(keyword)
     );
-    if (match) return match;
+    if (match) {
+      console.log(
+        `[WasapiLoopbackCapture] named loopback device found: "${match.name}" ` +
+        `(id=${match.id}) via keyword "${keyword}"`
+      );
+      return { device: match, channelCount: match.maxInputChannels, mode: "named-input" };
+    }
   }
+
+  // ── Diagnostics: log all devices so we know what's available ──────────────
+  console.warn("[WasapiLoopbackCapture] No loopback device found. Available devices:");
+  devices.forEach((d) =>
+    console.warn(
+      `  id=${d.id} "${d.name}" [${d.hostAPIName}] ` +
+      `in=${d.maxInputChannels} out=${d.maxOutputChannels}`
+    )
+  );
+
   return null;
 }
 
@@ -77,37 +117,59 @@ class WasapiLoopbackCapture extends EventEmitter {
   async start() {
     if (this._stream) return;
 
-    const device = findLoopbackDevice(this._portAudio);
-    if (!device) {
+    const result = findLoopbackDevice(this._portAudio);
+    if (!result) {
       this.emit(
         "error",
         new Error(
-          "No loopback capture device found. Enable Stereo Mix in Windows Sound settings (Recording tab → Show Disabled Devices → Enable Stereo Mix), or install VB-Audio Cable."
+          "No loopback capture device found.\n\n" +
+          "To fix this on Windows, use one of:\n" +
+          "  • VB-Audio Cable (free, works in corporate/GPO environments): https://vb-audio.com/Cable/\n" +
+          "  • Enable Stereo Mix: right-click speaker icon → Sounds → Recording tab " +
+            "→ right-click empty area → Show Disabled Devices → Enable Stereo Mix\n\n" +
+          "Restart OnTopic after installing/enabling."
         )
       );
       return;
     }
 
+    const { device, channelCount, mode } = result;
+
     try {
       this._stream = this._portAudio.AudioIO({
         inOptions: {
-          // Cap channels to what the device supports
-          channelCount: Math.min(this.channels, device.maxInputChannels),
-          sampleFormat: this._portAudio.SampleFormat16Bit,
-          sampleRate:   this.sampleRate,
-          deviceId:     device.id,
-          closeOnError: false,
+          channelCount:  Math.min(this.channels, channelCount),
+          sampleFormat:  this._portAudio.SampleFormat16Bit,
+          sampleRate:    this.sampleRate,
+          deviceId:      device.id,
+          closeOnError:  false,
         },
       });
 
       this._stream.on("data",  (chunk) => this.emit("data", chunk));
-      this._stream.on("error", (err)   => this.emit("error", err));
+      this._stream.on("error", (err) => {
+        // If WASAPI loopback mode failed, surface a clear error so the user
+        // knows which fallback to use.
+        const msg = mode === "wasapi-loopback"
+          ? `WASAPI loopback failed on "${device.name}": ${err.message}. ` +
+            "Install VB-Audio Cable (https://vb-audio.com/Cable/) or enable Stereo Mix " +
+            "as a fallback."
+          : err.message;
+        this.emit("error", new Error(msg));
+      });
       this._stream.start();
 
-      console.log(`[WasapiLoopbackCapture] started — device: "${device.name}" (id=${device.id})`);
+      console.log(
+        `[WasapiLoopbackCapture] started — mode=${mode} device="${device.name}" ` +
+        `(id=${device.id}) sampleRate=${this.sampleRate}`
+      );
     } catch (err) {
       this._stream = null;
-      this.emit("error", err);
+      const msg = mode === "wasapi-loopback"
+        ? `WASAPI loopback open failed on "${device.name}": ${err.message}. ` +
+          "Try installing VB-Audio Cable (https://vb-audio.com/Cable/) or enabling Stereo Mix."
+        : err.message;
+      this.emit("error", new Error(msg));
     }
   }
 

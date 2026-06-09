@@ -1,4 +1,4 @@
-import { Podcast, Radio, Library, UserCircle, Building2, Briefcase, FolderOpen, Sun, Moon, Headphones, Settings, LogOut, PanelLeftClose, PanelLeftOpen, BarChart2 } from "lucide-react";
+import { Activity, Library, UserCircle, Building2, Briefcase, FolderOpen, Sun, Moon, Settings, LogOut, PanelLeftClose, PanelLeftOpen, BarChart2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -18,16 +18,17 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { NriLogo } from "@/components/nri-logo";
 
 const navItems = [
-  { title: "Go Live", url: "/", icon: Radio },
-  { title: "Episodes", url: "/sessions", icon: Library },
+  { title: "Live Session", url: "/live", icon: Activity },
+  { title: "Sessions", url: "/sessions", icon: Library },
   { title: "Intelligence", url: "/analytics", icon: BarChart2 },
   { title: "Partners", url: "/partners", icon: Building2 },
   { title: "Competencies", url: "/competencies", icon: Briefcase },
   { title: "Reference Library", url: "/reference-library", icon: FolderOpen },
-  { title: "Voice Training", url: "/voice-training", icon: UserCircle },
-  { title: "Studio Settings", url: "/studio-settings", icon: Settings },
+  { title: "Speaker Profile", url: "/voice-training", icon: UserCircle },
+  { title: "Settings", url: "/studio-settings", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -44,19 +45,22 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-2 border-b border-sidebar-border group-data-[collapsible=icon]:p-1.5">
-          <Link href="/welcome" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
-            <Headphones className="h-4 w-4 text-primary-foreground" />
+        <Link href="/welcome" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
+          <div className="flex h-8 w-8 items-center justify-center shrink-0 group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7">
+            <NriLogo
+              variant={theme === "dark" ? "white" : "color"}
+              height={20}
+            />
           </div>
           <div className="overflow-hidden group-data-[collapsible=icon]:hidden">
-            <h2 className="text-sm font-semibold text-sidebar-foreground tracking-tight">OnTopic</h2>
-            <p className="text-[10px] text-muted-foreground">PreSales Consulting Companion</p>
+            <h2 className="text-sm font-semibold text-sidebar-foreground tracking-tight">NRI North America</h2>
+            <p className="text-[10px] text-muted-foreground">OnTopic</p>
           </div>
         </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Studio</SidebarGroupLabel>
+          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (

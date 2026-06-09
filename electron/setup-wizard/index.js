@@ -43,10 +43,10 @@
   async function setupMac(win) {
     const { response } = await dialog.showMessageBox(win, {
       type: "info",
-      title: "OnTopic Setup — macOS Audio",
+      title: "NRI OnTopic Setup — macOS Audio",
       message: "System Audio Capture Setup",
       detail:
-        "OnTopic needs to capture your speaker output to hear remote participants.\n\n" +
+        "NRI OnTopic needs to capture your speaker output to hear remote participants.\n\n" +
         "This requires installing the BlackHole virtual audio driver (free, open source).\n\n" +
         "Click Install to proceed. You will be prompted for your admin password once.",
       buttons: ["Install BlackHole", "Skip for Now"],
@@ -64,10 +64,10 @@
   async function setupWin(win) {
     await dialog.showMessageBox(win, {
       type: "info",
-      title: "OnTopic Setup — Windows Audio",
+      title: "NRI OnTopic Setup — Windows Audio",
       message: "Audio Capture Ready",
       detail:
-        "OnTopic will capture your microphone and speaker output automatically.\n\n" +
+        "NRI OnTopic will capture your microphone and speaker output automatically.\n\n" +
         "Make sure your headset or speakers are set as the Default Playback Device in Windows Sound Settings.",
       buttons: ["Got it"],
     });
@@ -76,10 +76,10 @@
   async function setupLinux(win) {
     await dialog.showMessageBox(win, {
       type: "info",
-      title: "OnTopic Setup — Linux Audio",
+      title: "NRI OnTopic Setup — Linux Audio",
       message: "PulseAudio / PipeWire Detected",
       detail:
-        "OnTopic will use your system audio monitor source to capture speaker output.\n\n" +
+        "NRI OnTopic will use your system audio monitor source to capture speaker output.\n\n" +
         "No additional setup required.",
       buttons: ["Got it"],
     });

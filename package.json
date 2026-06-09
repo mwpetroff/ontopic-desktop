@@ -1,7 +1,7 @@
 {
   "name": "ontopic-desktop",
   "version": "0.1.0",
-  "description": "OnTopic Desktop — Electron app with system-level audio capture",
+  "description": "NRI North America OnTopic — AI meeting intelligence for PreSales consulting",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
@@ -9,6 +9,7 @@
     "rebuild": "electron-rebuild -w naudiodon,segfault-handler",
     "test": "vitest run",
     "test:watch": "vitest",
+    "generate-demo-audio": "node scripts/generate-demo-audio.mjs",
     "server": "tsx server/index.ts",
     "build": "vite build && electron-builder",
     "build:win": "vite build && electron-builder --win",
@@ -35,6 +36,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
     "concurrently": "^8.2.0",
+    "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.9",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.0",
@@ -126,7 +128,7 @@
   },
   "build": {
     "appId": "com.ontopic.desktop",
-    "productName": "OnTopic",
+    "productName": "NRI North America OnTopic",
     "directories": {
       "output": "dist-electron"
     },

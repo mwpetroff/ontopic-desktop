@@ -14,12 +14,13 @@ import { SentimentBadge } from "@/components/sentiment-indicator";
 import { SentimentEqualizerFull } from "@/components/sentiment-equalizer";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
-import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network } from "lucide-react";
+import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload } from "lucide-react";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { exportSessionPdf } from "@/lib/export-pdf";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/use-sessions";
-import type { Session, Topic, SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry } from "@shared/schema";
+import type { Session, Topic, SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, BANTData } from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
 import { formatDate, formatDuration } from "@/lib/date";
 
@@ -79,6 +80,7 @@ const tabTriggerClass = "h-7 rounded-none border-b-2 border-transparent px-3 tex
 export default function SessionDetail() {
   const params = useParams<{ id: string }>();
   const sessionId = parseInt(params.id || "0");
+  const { toast } = useToast();
 
   const { data: session, isLoading } = useSession(sessionId) as { data: SessionWithTopics | undefined; isLoading: boolean };
 
@@ -126,9 +128,9 @@ export default function SessionDetail() {
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center h-full">
-        <p className="text-muted-foreground">Episode not found</p>
+        <p className="text-muted-foreground">Session not found</p>
         <Link href="/sessions">
-          <Button variant="ghost" className="mt-4" data-testid="button-back-to-episodes">Back to Episodes</Button>
+          <Button variant="ghost" className="mt-4" data-testid="button-back-to-episodes">Back to Sessions</Button>
         </Link>
       </div>
     );
@@ -267,6 +269,10 @@ export default function SessionDetail() {
                   <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-1">{sessionSimilarProjects.length}</Badge>
                 </TabsTrigger>
               )}
+              <TabsTrigger value="salesforce" className={tabTriggerClass} data-testid="tab-salesforce">
+                <Briefcase className="h-3 w-3 mr-1" />
+                Salesforce Opp
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -317,7 +323,7 @@ export default function SessionDetail() {
                         <Sparkles className="h-6 w-6 text-muted-foreground/20 mx-auto mb-2" />
                         <p className="text-xs text-muted-foreground">
                           {session.status !== "completed"
-                            ? "Show notes will be generated when the episode wraps up."
+                            ? "A summary will be generated when the session wraps up."
                             : "No transcript available to summarize."}
                         </p>
                       </div>
@@ -403,7 +409,7 @@ export default function SessionDetail() {
             <ScrollArea className="h-full">
               <div className="p-4">
                 {session.transcript ? (
-                  <HighlightedTranscript text={session.transcript} topics={session.topics} sessionStart={session.createdAt} sessionEnd={session.endedAt} />
+                  <HighlightedTranscript text={session.transcript} topics={session.topics} sessionStart={session.createdAt instanceof Date ? session.createdAt.toISOString() : session.createdAt} sessionEnd={session.endedAt instanceof Date ? session.endedAt.toISOString() : session.endedAt} />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <BookOpen className="h-6 w-6 text-muted-foreground/20 mb-2" />
@@ -502,8 +508,8 @@ export default function SessionDetail() {
                   <SentimentEqualizerFull
                     sentimentData={sentimentData}
                     overallSentiment={session.overallSentiment}
-                    sessionStart={session.createdAt}
-                    sessionEnd={session.endedAt}
+                    sessionStart={session.createdAt instanceof Date ? session.createdAt.toISOString() : session.createdAt}
+                    sessionEnd={session.endedAt instanceof Date ? session.endedAt?.toISOString() : session.endedAt}
                   />
                 </div>
               </ScrollArea>
@@ -562,6 +568,78 @@ export default function SessionDetail() {
               </ScrollArea>
             </TabsContent>
           )}
+
+          <TabsContent value="salesforce" className="flex-1 overflow-hidden mt-0">
+              <ScrollArea className="h-full">
+                <div className="p-4 space-y-4">
+                  {/* Header + Push button */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-[#00A1E0]" />
+                      <h3 className="text-sm font-semibold">Salesforce Opportunity</h3>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 bg-[#00A1E0] hover:bg-[#0087be] text-white"
+                      onClick={() => toast({ title: "Salesforce integration coming soon", description: "Push-to-Salesforce will be available in a future release." })}
+                      data-testid="button-push-to-salesforce"
+                    >
+                      <CloudUpload className="h-3.5 w-3.5" />
+                      Push to Salesforce
+                    </Button>
+                  </div>
+
+                  {/* Opportunity fields */}
+                  <Card className="p-0 divide-y divide-border overflow-hidden">
+                    {(() => {
+                      const bantData = (session as any).bantData as BANTData | null;
+                      const speakers = (session.speakers || []) as SpeakerEntry[];
+                      const primaryContact = speakers.find(s => s.role !== "host");
+                      const fields: Array<{ label: string; value: string | null; icon: React.ReactNode; filled: boolean }> = [
+                        { label: "Opportunity Name", value: session.title || null, icon: <Briefcase className="h-3.5 w-3.5 text-[#00A1E0]" />, filled: !!session.title },
+                        { label: "Account", value: session.clientName || null, icon: <Building2 className="h-3.5 w-3.5 text-muted-foreground" />, filled: !!session.clientName },
+                        { label: "Stage", value: session.status === "completed" ? "Discovery" : null, icon: <Target className="h-3.5 w-3.5 text-muted-foreground" />, filled: session.status === "completed" },
+                        { label: "Amount", value: bantData?.budget?.value || null, icon: <DollarSign className="h-3.5 w-3.5 text-emerald-500" />, filled: !!bantData?.budget?.value },
+                        { label: "Close Date", value: bantData?.timeline?.value || null, icon: <Clock className="h-3.5 w-3.5 text-purple-500" />, filled: !!bantData?.timeline?.value },
+                        { label: "Primary Contact", value: primaryContact?.name || null, icon: <Users className="h-3.5 w-3.5 text-muted-foreground" />, filled: !!primaryContact },
+                        { label: "Decision Maker", value: bantData?.authority?.value || null, icon: <UserCheck className="h-3.5 w-3.5 text-blue-500" />, filled: !!bantData?.authority?.value },
+                        { label: "Pain Points", value: bantData?.needs?.value || null, icon: <Target className="h-3.5 w-3.5 text-amber-500" />, filled: !!bantData?.needs?.value },
+                        { label: "Industry", value: session.industry || null, icon: <Factory className="h-3.5 w-3.5 text-muted-foreground" />, filled: !!session.industry },
+                      ];
+                      return fields.map(({ label, value, icon, filled }) => (
+                        <div key={label} className="flex items-start gap-3 px-4 py-3">
+                          <div className="mt-0.5 shrink-0">{icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{label}</p>
+                            {filled && value ? (
+                              <p className="text-sm font-medium leading-snug">{value}</p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground/40 italic">Not captured</p>
+                            )}
+                          </div>
+                          {filled && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-1" />}
+                        </div>
+                      ));
+                    })()}
+                  </Card>
+
+                  {/* Next steps from action items */}
+                  {sessionActionItems.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Next Steps</p>
+                      <Card className="p-0 divide-y divide-border overflow-hidden">
+                        {sessionActionItems.slice(0, 5).map((item, i) => (
+                          <div key={i} className="px-4 py-2.5 flex items-start gap-2">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 mt-0.5" />
+                            <p className="text-sm leading-snug">{item.text}</p>
+                          </div>
+                        ))}
+                      </Card>
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
         </Tabs>
       </div>
     </div>

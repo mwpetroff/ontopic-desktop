@@ -14,35 +14,35 @@ import { MicTestWidget } from "@/components/mic-test-widget";
 const HOST_ROLES = [
   {
     id: "host",
-    name: "Show Host",
+    name: "PreSales Architect",
     role: "PreSales Architect",
     description: "Technical discovery, solution fit, and competitive positioning. Follow-ups focus on scalability, integration, and TCO.",
     icon: Mic,
   },
   {
     id: "producer",
-    name: "Producer",
+    name: "Project Manager",
     role: "Project Manager",
     description: "Timelines, risks, deliverables, and stakeholder alignment. Action items emphasize milestones and resource planning.",
     icon: ClipboardList,
   },
   {
     id: "engineer",
-    name: "Sound Engineer",
+    name: "Technical Resource",
     role: "Technical Resource",
     description: "Architecture details, integration points, and technical debt. Follow-ups probe system design and performance.",
     icon: Cpu,
   },
   {
     id: "correspondent",
-    name: "Correspondent",
+    name: "Business Analyst",
     role: "Business Analyst",
     description: "Requirements, business processes, ROI, and stakeholder needs. Action items focus on documentation and gap analysis.",
     icon: Briefcase,
   },
   {
     id: "account-executive",
-    name: "Deal Signal",
+    name: "Account Executive",
     role: "Account Executive",
     description: "Sales discovery, BANT qualification, and deal progression. Live dashboard tracks Budget, Authority, Needs, and Timeline as the conversation unfolds. Follow-ups are guided by your chosen sales methodology.",
     icon: TrendingUp,
@@ -87,26 +87,48 @@ export default function StudioSettings() {
 
   const [newUrl, setNewUrl] = useState("");
 
-  // OpenAI API key — stored in electron-store, not the database.
+  // OpenAI API key — in Electron: electron-store via IPC; in browser: server API.
   const isElectron = !!window.electronAudio;
   const [apiKey, setApiKey] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [savingKey, setSavingKey] = useState(false);
 
   useEffect(() => {
-    if (!window.electronAudio) return;
-    window.electronAudio.getApiKey().then((k) => {
-      setApiKey(k);
-      setApiKeyInput(k);
-    });
-  }, []);
+    if (isElectron) {
+      window.electronAudio!.getApiKey().then((k) => {
+        setApiKey(k);
+        setApiKeyInput(k);
+      });
+    } else {
+      fetch("/api/settings/api-key")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.configured) {
+            setApiKey(data.masked ?? "configured");
+            // Don't pre-fill input with masked value — leave blank so user can update
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isElectron]);
 
   async function handleSaveApiKey() {
-    if (!window.electronAudio) return;
     setSavingKey(true);
     try {
-      await window.electronAudio.setApiKey(apiKeyInput.trim());
-      setApiKey(apiKeyInput.trim());
+      if (isElectron) {
+        await window.electronAudio!.setApiKey(apiKeyInput.trim());
+        setApiKey(apiKeyInput.trim());
+      } else {
+        const res = await fetch("/api/settings/api-key", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: apiKeyInput.trim() }),
+        });
+        if (!res.ok) throw new Error("Server error");
+        const trimmed = apiKeyInput.trim();
+        setApiKey(`${trimmed.slice(0, 7)}…${trimmed.slice(-4)}`);
+      }
+      setApiKeyInput("");
       toast({ title: "API key saved", description: "The server will use the new key immediately." });
     } catch {
       toast({ title: "Failed to save API key", variant: "destructive" });
@@ -141,7 +163,7 @@ export default function StudioSettings() {
       <div className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center gap-3 p-4">
           <Settings className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-semibold" data-testid="text-page-title">Studio Settings</h1>
+          <h1 className="text-lg font-semibold" data-testid="text-page-title">Settings</h1>
         </div>
       </div>
 
@@ -185,7 +207,6 @@ export default function StudioSettings() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold">{role.name}</span>
-                            <Badge variant="secondary" className="text-[10px] h-4">{role.role}</Badge>
                             {isSelected && (
                               <Badge className="text-[10px] h-4 bg-primary text-primary-foreground">Active</Badge>
                             )}
@@ -375,8 +396,7 @@ export default function StudioSettings() {
             )}
           </div>
 
-          {isElectron && (
-            <div className="border-t border-border pt-4">
+          <div className="border-t border-border pt-4">
               <div className="flex items-center gap-2 mb-1">
                 <Key className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold">OpenAI API Key</h2>
@@ -427,7 +447,6 @@ export default function StudioSettings() {
                 </p>
               )}
             </div>
-          )}
 
           <div className="border-t border-border pt-4">
             <div className="flex items-center gap-2 mb-1">

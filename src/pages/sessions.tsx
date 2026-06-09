@@ -34,7 +34,7 @@ function SessionCard({ session, onDelete, showClient }: { session: Session; onDe
           <Input
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
-            placeholder="Episode title"
+            placeholder="Session title"
             className="h-8 text-sm"
             data-testid={`input-edit-title-${session.id}`}
           />
@@ -258,9 +258,9 @@ export default function Sessions() {
         <div className="flex items-center justify-between gap-3 p-4">
           <div className="flex items-center gap-3">
             <History className="h-5 w-5 text-muted-foreground" />
-            <h1 className="text-lg font-semibold" data-testid="text-page-title">Episodes</h1>
+            <h1 className="text-lg font-semibold" data-testid="text-page-title">Sessions</h1>
           </div>
-          <Badge variant="secondary">{completedSessions.length} episodes</Badge>
+          <Badge variant="secondary">{completedSessions.length} sessions</Badge>
         </div>
         {!isLoading && sessions.filter(s => s.status === "completed").length > 0 && (
           <div className="px-4 pb-3">
@@ -295,9 +295,9 @@ export default function Sessions() {
           ) : completedSessions.length === 0 && !searchQuery.trim() ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <History className="h-12 w-12 text-muted-foreground/20 mb-4" />
-              <h2 className="text-lg font-semibold mb-1">No Episodes Yet</h2>
+              <h2 className="text-lg font-semibold mb-1">No Sessions Yet</h2>
               <p className="text-sm text-muted-foreground max-w-xs">
-                Go live from the dashboard to start recording your first episode.
+                Start a session from the Live Session page to capture your first meeting.
               </p>
             </div>
           ) : completedSessions.length === 0 && searchQuery.trim() ? (
@@ -305,7 +305,7 @@ export default function Sessions() {
               <Search className="h-10 w-10 text-muted-foreground/20 mb-3" />
               <h2 className="text-sm font-semibold mb-1">No matches</h2>
               <p className="text-xs text-muted-foreground max-w-xs">
-                No episodes match "{searchQuery.trim()}"
+                No sessions match "{searchQuery.trim()}"
               </p>
             </div>
           ) : (

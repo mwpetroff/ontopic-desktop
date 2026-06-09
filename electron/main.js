@@ -163,7 +163,7 @@
       height: 900,
       minWidth: 1024,
       minHeight: 700,
-      title: "OnTopic",
+      title: "NRI North America | OnTopic",
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,
@@ -178,7 +178,6 @@
 
     mainWindow.loadURL(startUrl);
 
-    if (isDev) mainWindow.webContents.openDevTools();
 
     mainWindow.on("closed", () => { mainWindow = null; });
   }
@@ -190,12 +189,12 @@
     const icon = nativeImage.createFromPath(iconPath);
     tray = new Tray(icon);
     const contextMenu = Menu.buildFromTemplate([
-      { label: "Open OnTopic", click: () => mainWindow?.show() },
+      { label: "Open NRI OnTopic", click: () => mainWindow?.show() },
       { label: "Stop Capture", click: stopCapture },
       { type: "separator" },
       { label: "Quit", role: "quit" },
     ]);
-    tray.setToolTip("OnTopic — Active");
+    tray.setToolTip("NRI North America OnTopic — Active");
     tray.setContextMenu(contextMenu);
   }
 

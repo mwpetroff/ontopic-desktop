@@ -23,11 +23,11 @@ import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
 import { ReorderableColumns, type ColumnDef } from "@/components/reorderable-columns";
 import {
-  Radio, Square, Mic, MicOff, Loader2, AlertCircle, BookOpen,
-  Play, ClipboardList, HelpCircle, Building2, Podcast,
+  Activity, Square, Mic, MicOff, Loader2, AlertCircle, BookOpen,
+  Play, ClipboardList, HelpCircle, Building2,
   Wrench, Lightbulb, Factory, Users, BarChart3, FolderOpen, ExternalLink,
   DollarSign, UserCheck, Target, Clock, CheckCircle2, Circle, TrendingUp,
-  Key, Speaker, X
+  Key, Speaker, X, Briefcase
 } from "lucide-react";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { matchSpeaker } from "@/lib/speaker-match";
@@ -82,14 +82,34 @@ const DEMO_CHUNKS = [
 ];
 
 const AE_DEMO_CHUNKS = [
-  "Hi, thanks for joining. I'm Jennifer Walsh, CTO at Meridian Financial. We're a mid-size wealth management and lending firm, about eighteen hundred employees across twelve offices. I'll be honest — the reason I reached out is that our on-premises data infrastructure is becoming a serious liability. We're running a fifteen-year-old Oracle data warehouse on aging HPE hardware, and we're at a point where the maintenance cost and the risk of failure outweigh any benefit of staying on-prem.",
-  "Thanks for the context, Jennifer. When you say liability — is the primary driver the operational risk of hardware failure, or is it more the cost side, or are there regulatory pressures coming into play as well? And are there specific business capabilities you're missing today because of the current architecture?",
-  "It's all three, honestly. From a regulatory standpoint we're under increased OCC and SEC scrutiny and our current environment makes audit trails incredibly painful to produce — our compliance team spends weeks pulling data manually for each examination. On the capability side, our risk and analytics teams desperately want real-time portfolio exposure dashboards and we simply cannot build those on the current stack. And the hardware — we had an unplanned outage in January that took our reporting environment down for six hours. That is not acceptable for a financial services firm.",
-  "That January outage and the compliance exposure are exactly the kind of triggers that tend to create urgency. Jennifer, on the decision and investment side — who else is at the table for a project of this scope? And do you have a sense yet of what the board has approved or what funding envelope you're working within?",
-  "The board approved a digital infrastructure modernization budget in January right after that outage. I own the technology roadmap and the vendor selection decision — that's fully within my remit. We've earmarked six hundred thousand dollars for the platform migration and implementation in this fiscal year, with a follow-on phase two budget of similar size for the analytics layer. Our CISO Raj Patel has final sign-off on any cloud architecture from a security and compliance standpoint, and he's already reviewed Azure and AWS from a FedRAMP and SOC 2 perspective. Both are acceptable to him.",
-  "Six hundred K for phase one with a clear phase two path — that's a well-structured investment. Let me ask about timeline, because I want to understand what success looks like and when. You mentioned OCC and SEC examinations — are there specific audit windows or regulatory deadlines that are anchoring your go-live target?",
-  "Yes. We have an OCC examination scheduled for September and I need the new environment to be fully operational and auditable before that — which means we need to be live no later than end of July to give our compliance team at least six weeks to run parallel reporting and validate data lineage. That means a signed engagement agreement by end of May at the absolute latest. We've done preliminary conversations with two other consulting firms, but neither of them had deep financial services regulatory experience combined with Azure data engineering capability, which is what brought us to you specifically.",
-  "Jennifer, let me play back what I've heard to make sure I've got it right. Meridian has a critical dependency on aging Oracle infrastructure that creates both operational risk — as the January outage showed — and regulatory exposure with your OCC and SEC audit obligations. You need a cloud-native data platform on Azure that delivers real-time portfolio analytics and a defensible audit trail. You have six hundred K approved for phase one, the decision is yours with Raj's security sign-off, and you need to be fully live by end of July ahead of your September examination. If I've captured that correctly, I'd like to propose a four-week architecture assessment that maps your current Oracle schema to a Azure Synapse and Azure Purview target state, with a data lineage and compliance framework baked in from day one. That gives you something concrete to take back to the board and to Raj before we scope the full engagement.",
+  "Good morning Jennifer, Raj — thank you both for making the time today. I'm Alex Park, PreSales Architect at NRI North America. Before we dive in, I want to let my colleague introduce himself, and then we'd love to hear from your side as well. Our plan for today is introductions, then we'll spend most of our time understanding Meridian's current landscape and where you're looking to go. Does that agenda work for everyone?",
+  "Thanks Alex. Hi everyone, I'm David Chen, Account Executive at NRI. I cover financial services clients across the Northeast, and I've been looking forward to this conversation. We've done quite a bit of work in the wealth management and banking space, so I'm genuinely excited to learn more about what Meridian is working through.",
+  "Thank you both. Jennifer Walsh, CTO at Meridian Financial. We're a mid-size wealth management and lending firm — around eighteen hundred employees across twelve offices. I'll let Raj introduce himself as well, and then I'll walk you through why we reached out.",
+  "Raj Patel, CISO at Meridian. I'm joining primarily from a security and compliance angle. Any cloud migration we undertake has to meet our FedRAMP and SOC 2 obligations, so I'll be involved in evaluating any vendor or architecture decisions we move forward with.",
+  "So — the reason we reached out is that our on-premises data infrastructure has become a serious liability. We're running a fifteen-year-old Oracle data warehouse on aging HPE hardware, and the maintenance cost and risk of failure have honestly reached a tipping point. We had an unplanned outage in January that took our entire reporting environment down for six hours. For a financial services firm, that is simply not acceptable. On top of that, we're under increasing OCC and SEC scrutiny, and our current environment makes producing audit trails incredibly painful — our compliance team spends weeks manually pulling data for each examination.",
+  "Jennifer, that context is really helpful. The January outage and the compliance exposure sound like the key drivers here. I want to make sure we understand the decision and investment landscape correctly — who else is at the table for a project of this scope? And has the board given any direction on budget or appetite for this kind of migration?",
+  "The board approved a digital infrastructure modernization budget right after the January outage. I own the technology roadmap and the vendor selection — that's within my remit. We've earmarked six hundred thousand dollars for the platform migration in this fiscal year, with a phase two budget of similar size for the analytics layer. Raj has final sign-off on any cloud architecture from a security standpoint. On timeline — we have an OCC examination scheduled for September, which means we need to be fully operational and auditable by end of July. That means a signed engagement by end of May at the absolute latest.",
+  "Sorry to jump in here — I'm joining from the finance team. I just want to flag that any spend above five hundred thousand typically goes through an additional board approval cycle, so the six hundred K figure may need to be structured carefully across fiscal quarters to stay within delegated authority limits.",
+  "That's a really important point, and I appreciate you flagging it. We can absolutely work with you on phasing the engagement to fit within those approval thresholds — that's something we've navigated before with other clients in regulated industries. Jennifer, Raj — given the hard July deadline, I'd like to propose a four-week architecture assessment as a concrete first step. It gives us something to bring back to the board, with compliance and data lineage baked in from day one. Before we close out today, are there any other stakeholders we should loop in for the assessment kickoff?",
+  "Before we go any further on document sharing — and I appreciate the offer of the architecture documentation — I need to flag that any exchange of sensitive infrastructure details, including our Oracle schema or the OCC exam report, will require a mutual NDA to be in place first. That is a hard requirement from our legal team. I don't want it to slow things down, but it can't be an afterthought either.",
+  "Raj, completely understood, and we wouldn't have it any other way. Let's make getting the mutual NDA signed action item number one. David will reach out to your legal contact by end of this week to get that process started. We've done this with other regulated clients and we can typically turn it around within a few business days. Once it's signed we are ready to move immediately on the architecture documentation.",
+  "Perfect. So our action items: number one, mutual NDA — David and Raj's legal team to coordinate by end of week. Number two, Raj sends the security questionnaire once the NDA is in place. Number three, I'll share the architecture documentation and the OCC exam report. Number four, Alex delivers a brief scope document for the four-week assessment. And let's reconnect next Thursday to confirm everything is in motion before end of month. Thanks everyone — this was a productive first conversation.",
+];
+
+// Parallel voice arrays — index matches the corresponding chunk array
+const DEMO_VOICES = ["nova", "onyx", "shimmer", "fable", "echo", "nova", "alloy", "nova"];
+// Alex Park=onyx, David Chen=echo, Jennifer Walsh=nova, Raj Patel=fable, Speaker 1=alloy
+const AE_DEMO_VOICES = ["onyx", "echo", "nova", "fable", "nova", "onyx", "nova", "alloy", "onyx", "fable", "onyx", "nova"];
+
+// Explicit speaker names per chunk — bypasses AI speaker detection in the demo
+const DEMO_SPEAKERS = [
+  "Sarah Chen", "Mark Rodriguez", "Priya Patel", "Mark Rodriguez",
+  "James Park", "Sarah Chen", "Lisa Wang", "Sarah Chen",
+];
+const AE_DEMO_SPEAKERS = [
+  "Alex Park", "David Chen", "Jennifer Walsh", "Raj Patel",
+  "Jennifer Walsh", "Alex Park", "Jennifer Walsh", "Speaker 1",
+  "Alex Park", "Raj Patel", "Alex Park", "Jennifer Walsh",
 ];
 
 const METHODOLOGY_LABELS: Record<string, string> = {
@@ -144,7 +164,7 @@ function DashboardTopicGroups({
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [activeSession, setActiveSession] = useState<Session | null>(null);
-  const [sessionTitle, setSessionTitle] = useState("New Episode");
+  const [sessionTitle, setSessionTitle] = useState("New Session");
   const [clientName, setClientName] = useState("");
   const [industry, setIndustry] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -183,6 +203,10 @@ export default function Dashboard() {
   const demoAnimationRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const demoProjectIdsRef = useRef<number[]>([]);
   const demoChunksRef = useRef<string[]>(DEMO_CHUNKS);
+  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const demoAudioPrefixRef = useRef<string>("demo");
+  const demoSpeakersRef = useRef<string[]>(DEMO_SPEAKERS);
+  const demoWordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDemoRunningRef = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const chunkSnapshotsRef = useRef<number[][]>([]);
@@ -190,12 +214,24 @@ export default function Dashboard() {
   const { data: settings } = useSettings();
   const isAEMode = settings?.hostRole === "account-executive";
 
+  // Returns true if an API key is configured (Electron IPC or server API).
+  async function checkApiKeyConfigured(): Promise<boolean> {
+    if (window.electronAudio) {
+      const key = await window.electronAudio.getApiKey();
+      return !!key && key.trim().length > 0;
+    }
+    try {
+      const res = await fetch("/api/settings/api-key");
+      const data = await res.json();
+      return !!data.configured;
+    } catch {
+      return false;
+    }
+  }
+
   // Check whether an OpenAI API key has been configured
   useEffect(() => {
-    if (!window.electronAudio) return;
-    window.electronAudio.getApiKey().then((key) => {
-      setApiKeyMissing(!key || key.trim().length === 0);
-    });
+    checkApiKeyConfigured().then((configured) => setApiKeyMissing(!configured));
   }, []);
 
   useEffect(() => {
@@ -231,7 +267,7 @@ export default function Dashboard() {
   const displayedTranscript = useTypewriter(transcript, 3, 16);
 
   const createSessionMutation = useMutation({
-    mutationFn: async (data: { title: string; clientName?: string }) => {
+    mutationFn: async (data: { title: string; clientName?: string; industry?: string }) => {
       const res = await apiRequest("POST", "/api/sessions", data);
       return res.json();
     },
@@ -313,16 +349,16 @@ export default function Dashboard() {
 
       if (data.newTopics && data.newTopics.length > 0) {
         await refetchTopics();
-        const newIds = new Set(
+        const newIds = new Set<number>(
           data.allTopics
             ?.filter((t: Topic) => data.newTopics.some((nt: { term: string }) => nt.term === t.term))
             .map((t: Topic) => t.id) || []
         );
-        setNewTopicIds(prev => new Set([...prev, ...newIds]));
+        setNewTopicIds(prev => new Set<number>([...prev, ...newIds]));
 
         setTimeout(() => {
           setNewTopicIds(prev => {
-            const next = new Set(prev);
+            const next = new Set<number>(prev);
             newIds.forEach((id: number) => next.delete(id));
             return next;
           });
@@ -426,7 +462,7 @@ export default function Dashboard() {
     }
   }, [toast]);
 
-  const audioCapture = useAudioCapture({ intervalMs: 6000, deviceId: selectedMicId || undefined, onFrequencyData: onLiveFrequencyData });
+  const audioCapture = useAudioCapture({ intervalMs: 6000, onFrequencyData: onLiveFrequencyData });
   const { captureErrors, dismissCaptureError } = audioCapture;
   const speakerError = captureErrors.find((e) => e.source === "speaker");
   const micError = captureErrors.find((e) => e.source === "mic");
@@ -448,20 +484,86 @@ export default function Dashboard() {
     }
 
     const chunk = chunks[chunkIdx];
+    const speaker = demoSpeakersRef.current[chunkIdx];
     setIsProcessing(true);
 
+    // Load audio and get its duration before playing so we can pace word streaming
+    const audioSrc = `/demo-audio/${demoAudioPrefixRef.current}-${chunkIdx}.mp3`;
+    const audio = new Audio(audioSrc);
+    demoAudioRef.current = audio;
+
+    const audioDuration = await new Promise<number>(resolve => {
+      audio.addEventListener("loadedmetadata", () => resolve(audio.duration), { once: true });
+      audio.addEventListener("error", () => resolve(0), { once: true });
+      setTimeout(() => resolve(0), 2000);
+      audio.load();
+    });
+
+    const audioEnded = new Promise<void>(resolve => {
+      if (audioDuration === 0) { resolve(); return; }
+      audio.addEventListener("ended", () => resolve(), { once: true });
+      audio.addEventListener("error", () => resolve(), { once: true });
+      setTimeout(() => resolve(), 90_000);
+    });
+
+    audio.playbackRate = 1.12;
+    audio.play().catch(() => {});
+
+    // Stream transcript words in sync with the audio duration.
+    // Words appear slightly after audio starts (0.5 s delay) so voice is "ahead".
+    const words = chunk.split(/\s+/);
+    const chunkPrefix = `[${speaker}] `;
+    const msPerWord = audioDuration > 0 ? (audioDuration * 1000) / (words.length * 1.12) : 0;
+    const hasAudio = msPerWord > 0;
+
+    if (hasAudio) {
+      let streamIdx = 0;
+      const streamWord = () => {
+        if (!isDemoRunningRef.current) return;
+        streamIdx = Math.min(words.length, streamIdx + 1);
+        const displayed = chunkPrefix + words.slice(0, streamIdx).join(" ");
+        setTranscript(prev => {
+          if (!prev) return displayed;
+          const sep = "\n\n";
+          const lastSepIdx = prev.lastIndexOf(sep);
+          const lastEntry = lastSepIdx >= 0 ? prev.slice(lastSepIdx + sep.length) : prev;
+          if (lastEntry.startsWith(chunkPrefix)) {
+            return prev.slice(0, lastSepIdx >= 0 ? lastSepIdx + sep.length : 0) + displayed;
+          }
+          return prev + sep + displayed;
+        });
+        if (streamIdx < words.length) {
+          demoWordTimerRef.current = setTimeout(streamWord, msPerWord);
+        }
+      };
+      demoWordTimerRef.current = setTimeout(streamWord, 500);
+    }
+
+    // Send to analysis 1.5 s after audio starts (audio is "ahead" of AI processing)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    if (!isDemoRunningRef.current) return;
+
     try {
-      const res = await apiRequest("POST", `/api/sessions/${session.id}/demo-analyze`, {
-        text: chunk,
-        features: {
-          actionItems: enableActionItems,
-          followUpQuestions: enableFollowUpQuestions,
-          similarProjects: true,
-        },
-      });
+      const [res] = await Promise.all([
+        apiRequest("POST", `/api/sessions/${session.id}/demo-analyze`, {
+          text: chunk,
+          speaker,
+          features: {
+            actionItems: enableActionItems,
+            followUpQuestions: enableFollowUpQuestions,
+            similarProjects: true,
+          },
+        }),
+        audioEnded,
+      ]);
+
+      if (!isDemoRunningRef.current) return;
 
       const data = await res.json();
-      await handleAnalysisResponse(data);
+      // Transcript was already streamed word-by-word; suppress the duplicate from the API response.
+      // If no audio was available, let handleAnalysisResponse write the transcript normally.
+      await handleAnalysisResponse(hasAudio ? { ...data, transcript: undefined } : data);
 
       setIsProcessing(false);
       const nextIdx = chunkIdx + 1;
@@ -470,7 +572,7 @@ export default function Dashboard() {
       if (nextIdx < demoChunksRef.current.length) {
         demoTimerRef.current = setTimeout(() => {
           processDemoChunk(session, nextIdx);
-        }, 2000);
+        }, 800); // short pause between speakers
       } else {
         setIsDemoRunning(false);
         if (demoAnimationRef.current) {
@@ -510,8 +612,7 @@ export default function Dashboard() {
   }, [handleAnalysisResponse, toast, enableActionItems, enableFollowUpQuestions]);
 
   const handleStartSession = async () => {
-    const liveKey = await window.electronAudio?.getApiKey?.();
-    const liveKeyMissing = !liveKey || liveKey.trim().length === 0;
+    const liveKeyMissing = !(await checkApiKeyConfigured());
     if (liveKeyMissing) {
       setApiKeyMissing(true);
       toast({
@@ -593,8 +694,7 @@ export default function Dashboard() {
   const handleStartDemo = async () => {
     try {
       // Always check the current key state rather than relying on mount-time snapshot.
-      const liveKey = await window.electronAudio?.getApiKey?.();
-      const liveKeyMissing = !liveKey || liveKey.trim().length === 0;
+      const liveKeyMissing = !(await checkApiKeyConfigured());
       if (liveKeyMissing) {
         setApiKeyMissing(true);
         toast({
@@ -610,9 +710,13 @@ export default function Dashboard() {
 
       if (isAE) {
         demoChunksRef.current = AE_DEMO_CHUNKS;
+        demoAudioPrefixRef.current = "ae-demo";
+        demoSpeakersRef.current = AE_DEMO_SPEAKERS;
         demoProjectIdsRef.current = [];
       } else {
         demoChunksRef.current = DEMO_CHUNKS;
+        demoAudioPrefixRef.current = "demo";
+        demoSpeakersRef.current = DEMO_SPEAKERS;
         const createdIds: number[] = [];
         for (const project of DEMO_REFERENCE_PROJECTS) {
           try {
@@ -669,6 +773,15 @@ export default function Dashboard() {
         clearInterval(demoAnimationRef.current);
         demoAnimationRef.current = null;
       }
+      if (demoWordTimerRef.current) {
+        clearTimeout(demoWordTimerRef.current);
+        demoWordTimerRef.current = null;
+      }
+      if (demoAudioRef.current) {
+        demoAudioRef.current.pause();
+        demoAudioRef.current.src = "";
+        demoAudioRef.current = null;
+      }
       setIsDemoRunning(false);
       setDemoAudioLevel(0);
       setDemoChunkIndex(0);
@@ -693,7 +806,12 @@ export default function Dashboard() {
     return () => {
       audioCapture.stopCapture();
       if (demoTimerRef.current) clearTimeout(demoTimerRef.current);
+      if (demoWordTimerRef.current) clearTimeout(demoWordTimerRef.current);
       if (demoAnimationRef.current) clearInterval(demoAnimationRef.current);
+      if (demoAudioRef.current) {
+        demoAudioRef.current.pause();
+        demoAudioRef.current.src = "";
+      }
       cleanupDemoProjectsRef.current();
     };
   }, []);
@@ -716,8 +834,8 @@ export default function Dashboard() {
       <div className="flex flex-col h-full">
         <div className="border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex items-center gap-3 p-4">
-            <Podcast className="h-5 w-5 text-primary" />
-            <h1 className="text-lg font-semibold" data-testid="text-page-title">New Episode</h1>
+            <Activity className="h-5 w-5 text-primary" />
+            <h1 className="text-lg font-semibold" data-testid="text-page-title">New Session</h1>
           </div>
         </div>
 
@@ -733,9 +851,9 @@ export default function Dashboard() {
                   className="underline font-medium"
                   onClick={() => navigate("/studio-settings")}
                 >
-                  Go to Studio Settings
+                  Go to Settings
                 </button>{" "}
-                to add your key, then come back to go live.
+                to add your key, then come back to start a session.
               </AlertDescription>
             </Alert>
           </div>
@@ -750,7 +868,7 @@ export default function Dashboard() {
                   <AlertDescription className="text-xs">
                     Remote participant audio won&apos;t be captured. To enable it on Windows:{" "}
                     right-click the speaker icon → Sounds → Recording tab → Show Disabled Devices
-                    → right-click <strong>Stereo Mix</strong> → Enable. Then restart OnTopic.
+                    → right-click <strong>Stereo Mix</strong> → Enable. Then restart NRI OnTopic.
                   </AlertDescription>
                 </div>
                 <button onClick={() => dismissCaptureError("speaker")} className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground">
@@ -789,11 +907,11 @@ export default function Dashboard() {
 
           <div className="w-full max-w-sm space-y-3">
             <Input
-              placeholder="Episode title..."
+              placeholder="Session title..."
               value={sessionTitle}
               onChange={(e) => setSessionTitle(e.target.value)}
-              onFocus={() => { if (sessionTitle === "New Episode") setSessionTitle(""); }}
-              onBlur={() => { if (!sessionTitle.trim()) setSessionTitle("New Episode"); }}
+              onFocus={() => { if (sessionTitle === "New Session") setSessionTitle(""); }}
+              onBlur={() => { if (!sessionTitle.trim()) setSessionTitle("New Session"); }}
               data-testid="input-session-title"
             />
             <div className="relative">
@@ -882,9 +1000,9 @@ export default function Dashboard() {
               {createSessionMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
-                <Radio className="h-4 w-4 mr-2" />
+                <Activity className="h-4 w-4 mr-2" />
               )}
-              Go Live
+              Start Session
             </Button>
 
             <div className="relative flex items-center gap-3">
@@ -901,10 +1019,10 @@ export default function Dashboard() {
               data-testid="button-start-demo"
             >
               <Play className="h-4 w-4 mr-2" />
-              Demo Tape
+              Run Demo
             </Button>
             <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
-              Plays a sample episode of a cloud migration meeting with AI-powered analysis. No mic needed.
+              Plays a sample session of a cloud migration meeting with AI-powered analysis. No mic needed.
             </p>
           </div>
         </div>
@@ -979,7 +1097,7 @@ export default function Dashboard() {
                 <SentimentEqualizer
                   sentimentData={sentimentData}
                   overallSentiment={overallSentiment}
-                  sessionStart={activeSession.createdAt}
+                  sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt}
                 />
               </div>
             )}
@@ -1043,9 +1161,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* AE-mode pinned top row: Sales Questions | BANT | Sales Methodology */}
+        {/* AE-mode pinned top row: Sales Questions | BANT | Sales Methodology | Salesforce Opp */}
         {isAEMode && (
-          <div className="shrink-0 grid grid-cols-3 border-b border-border">
+          <div className="shrink-0 grid grid-cols-4 border-b border-border">
 
             {/* Sales Questions */}
             <div className="flex flex-col border-r border-border overflow-hidden" data-testid="column-followups-ae">
@@ -1223,6 +1341,44 @@ export default function Dashboard() {
                   <p className="text-xs text-muted-foreground">Methodology hidden.</p>
                 </div>
               )}
+            </div>
+
+            {/* Salesforce Opportunity */}
+            <div className="flex flex-col overflow-hidden" data-testid="column-sf-opp-ae">
+              <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-card/50 shrink-0">
+                <Briefcase className="h-3.5 w-3.5 text-[#00A1E0]" />
+                <span className="text-xs font-semibold">Salesforce Opp</span>
+                {(() => {
+                  const filled = [
+                    activeSession?.clientName || clientName,
+                    bantData?.budget?.value,
+                    bantData?.timeline?.value,
+                    bantData?.authority?.value,
+                    liveSpeakers.find(s => s.role !== "host")?.name,
+                  ].filter(Boolean).length;
+                  return filled > 0 ? (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-auto">{filled}/5</Badge>
+                  ) : null;
+                })()}
+              </div>
+              <div className="p-2 space-y-1.5 overflow-y-auto">
+                {([
+                  { label: "Opportunity", value: activeSession?.title || sessionTitle || null },
+                  { label: "Account", value: activeSession?.clientName || clientName || null },
+                  { label: "Stage", value: (activeSession || isListening) ? "Discovery" : null },
+                  { label: "Amount", value: bantData?.budget?.value || null },
+                  { label: "Timeline", value: bantData?.timeline?.value || null },
+                  { label: "Contact", value: liveSpeakers.find(s => s.role !== "host")?.name || null },
+                  { label: "Decision Maker", value: bantData?.authority?.value || null },
+                ] as Array<{ label: string; value: string | null }>).map(({ label, value }) => (
+                  <div key={label} className="flex items-start gap-1.5">
+                    <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide font-medium w-[72px] shrink-0 pt-[1px]">{label}</span>
+                    <span className={`text-[10px] leading-snug break-words min-w-0 ${value ? "text-foreground font-medium" : "text-muted-foreground/30 italic"}`}>
+                      {value || "listening…"}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
 
           </div>
@@ -1409,7 +1565,7 @@ export default function Dashboard() {
                       <SentimentEqualizerFull
                         sentimentData={sentimentData}
                         overallSentiment={overallSentiment}
-                        sessionStart={activeSession.createdAt}
+                        sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt}
                       />
                     ) : (
                       <div className="flex flex-col items-center justify-center py-16 text-center px-3">
