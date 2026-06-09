@@ -75,7 +75,7 @@ OPENAI_API_KEY=sk-...
 ## Testing
 
 ```bash
-npm test           # Run full test suite (vitest, ~283 tests)
+npm test           # Run full test suite (vitest, 286 tests)
 npm run test:watch # Watch mode
 ```
 
@@ -92,7 +92,7 @@ Tests use an isolated temporary SQLite database and never touch the production d
 | `validation.test.ts` | Zod validation schemas for API request bodies |
 | `audio-mixer.test.ts` | PCM buffering, chunk sizing, label isolation, stop/flush |
 | `mic-capture.test.ts` | MicCapture lifecycle, mock portAudio, event emitters |
-| `speaker-capture-win.test.ts` | Windows loopback device lookup (Stereo Mix, VB-Cable, VoiceMeeter), error handling |
+| `speaker-capture-win.test.ts` | Windows loopback — WASAPI output strategy, named device lookup (Stereo Mix, VB-Cable, VoiceMeeter), error handling |
 | `auth-stub.test.ts` | Auth endpoints (login, logout, /api/auth/user) |
 
 > **After any `npm install`:** Run `npm test` to verify `better-sqlite3` wasn't accidentally rebuilt for Electron. If tests fail with a MODULE_VERSION error, run `npm rebuild better-sqlite3`.
