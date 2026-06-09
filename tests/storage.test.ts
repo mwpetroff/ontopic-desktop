@@ -197,6 +197,44 @@ describe("Storage: Voice Profiles", () => {
   });
 });
 
+describe("Storage: Session pagination (A-16)", () => {
+  const paginationIds: number[] = [];
+
+  it("creates 5 sessions for pagination test", async () => {
+    for (let i = 1; i <= 5; i++) {
+      const s = await storage.createSession({ title: `Pagination Session ${i}`, clientName: null, industry: null });
+      paginationIds.push(s.id);
+    }
+    expect(paginationIds).toHaveLength(5);
+  });
+
+  it("getAllSessions(limit=3) returns at most 3 sessions", async () => {
+    const result = await storage.getAllSessions(3);
+    expect(result.length).toBeLessThanOrEqual(3);
+  });
+
+  it("getAllSessions(limit=2, offset=0) and (limit=2, offset=2) return different sessions", async () => {
+    const page1 = await storage.getAllSessions(2, 0);
+    const page2 = await storage.getAllSessions(2, 2);
+    const ids1 = page1.map(s => s.id);
+    const ids2 = page2.map(s => s.id);
+    expect(ids1.every(id => !ids2.includes(id))).toBe(true);
+  });
+
+  it("getAllSessions(offset=99999) returns empty array when past the end", async () => {
+    const result = await storage.getAllSessions(10, 99999);
+    expect(result).toHaveLength(0);
+  });
+
+  it("cleans up pagination sessions", async () => {
+    for (const id of paginationIds) {
+      await storage.deleteSession(id);
+    }
+    const remaining = await storage.getAllSessions(100);
+    expect(paginationIds.every(id => !remaining.some(s => s.id === id))).toBe(true);
+  });
+});
+
 describe("Storage: Cleanup and cascades", () => {
   it("deletes test voice profile", async () => {
     await storage.deleteVoiceProfile(testVoiceProfileId);

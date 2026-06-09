@@ -50,6 +50,31 @@ describe("resolveSpeaker", () => {
     const result = resolveSpeaker("Jane Smith", ["Speaker 1"]);
     expect(result.speaker).toBe("Jane Smith");
   });
+
+  it("uses voice match at exactly 0.55 confidence (inclusive boundary)", () => {
+    const result = resolveSpeaker("AIGuess", [], { name: "Boundary Name", confidence: 0.55 });
+    expect(result.speaker).toBe("Boundary Name");
+  });
+
+  it("ignores voice match at 0.549 confidence (just below boundary)", () => {
+    const result = resolveSpeaker("AIGuess", [], { name: "Boundary Name", confidence: 0.549 });
+    expect(result.speaker).toBe("AIGuess");
+  });
+
+  it("treats empty string speaker same as null — falls back to last known speaker", () => {
+    const result = resolveSpeaker("", ["Alice"]);
+    expect(result.speaker).toBe("Alice");
+  });
+
+  it("voice match overrides a valid non-null AI speaker when confidence >= 0.55", () => {
+    const result = resolveSpeaker("DefinitelyWrong", ["Alice"], { name: "Bob", confidence: 0.9 });
+    expect(result.speaker).toBe("Bob");
+  });
+
+  it("NEW_SPEAKER with multiple named speakers assigns Speaker N", () => {
+    const result = resolveSpeaker("NEW_SPEAKER", ["Alice", "Bob"]);
+    expect(result.speaker).toBe("Speaker 1");
+  });
 });
 
 describe("aggregateSentiment", () => {
@@ -359,6 +384,53 @@ describe("persistSessionUpdates", () => {
         "Ghost text"
       )
     ).rejects.toThrow("Session 999999 not found");
+  });
+
+  it("persists role-specific requirements and painPoints", async () => {
+    const session = await makeSession();
+    const requirements = [{ text: "Must support SSO", source: "John" }];
+    const painPoints = [{ text: "Current system is too slow", impact: "high" }];
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [], requirements, painPoints },
+      "BA chunk.",
+      "BA chunk."
+    );
+    const updated = await storage.getSession(session.id);
+    expect(updated?.requirements).toHaveLength(1);
+    expect((updated?.requirements as any[])[0].text).toBe("Must support SSO");
+    expect(updated?.painPoints).toHaveLength(1);
+    expect((updated?.painPoints as any[])[0].impact).toBe("high");
+  });
+
+  it("persists competitorMentions for SA role", async () => {
+    const session = await makeSession();
+    const competitorMentions = [{ name: "Datadog", context: "Client uses Datadog for monitoring" }];
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [], competitorMentions },
+      "SA chunk.",
+      "SA chunk."
+    );
+    const updated = await storage.getSession(session.id);
+    expect(updated?.competitorMentions).toHaveLength(1);
+    expect((updated?.competitorMentions as any[])[0].name).toBe("Datadog");
+  });
+
+  it("persists timelineSignals and riskFlags for PM role", async () => {
+    const session = await makeSession();
+    const timelineSignals = [{ date: "Q3 2025", context: "Must go live before fiscal year end" }];
+    const riskFlags = [{ text: "Third-party vendor dependency", type: "vendor" }];
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [], timelineSignals, riskFlags },
+      "PM chunk.",
+      "PM chunk."
+    );
+    const updated = await storage.getSession(session.id);
+    expect(updated?.timelineSignals).toHaveLength(1);
+    expect(updated?.riskFlags).toHaveLength(1);
+    expect((updated?.riskFlags as any[])[0].type).toBe("vendor");
   });
 });
 
