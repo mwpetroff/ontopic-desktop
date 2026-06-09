@@ -113,6 +113,129 @@ const AE_DEMO_SPEAKERS = [
   "Alex Park", "Raj Patel", "Alex Park", "Jennifer Walsh",
 ];
 
+// ── BA (Business Analyst) demo — requirements gathering meeting ──────────────
+const BA_DEMO_CHUNKS = [
+  "Good morning everyone. I'm Rachel Torres, lead business analyst on this project. Today's goal is to document what the new procurement system needs to do. Our current process is creating real operational problems and we need to capture all requirements carefully before we begin vendor evaluation.",
+  "Hi Rachel. I'm Pat Singh from procurement operations. The biggest pain for our team right now is that we manually re-enter supplier invoices into two separate systems every single day. It takes about fifteen hours per person per week and we're getting data entry errors that delay supplier payments by up to ten days. It's costing us vendor goodwill.",
+  "This is Keiko Nakamura from legal and compliance. I need to flag a critical requirement: we failed an internal audit last quarter because we couldn't produce contract approval records on time. Any new system must maintain a full, immutable audit trail for every purchase order over five thousand dollars. That is a non-negotiable compliance requirement.",
+  "Rachel here. Adding to that — we need role-based approval workflows. Right now anyone in the department can approve any purchase regardless of amount. We need tiered approvals: purchases above twenty-five thousand require VP sign-off, and purchases above one hundred thousand require CFO approval. The system must enforce this automatically.",
+  "I'm David Okafor from IT. A hard integration requirement: the new system must connect bidirectionally and in real-time with our existing SAP S/4HANA ERP. We cannot afford a manual reconciliation step between procurement and finance. The system also needs to support at least two hundred concurrent users with sub-two-second response times for any search or lookup.",
+  "Pat again. I also need to stress the supplier onboarding problem. Onboarding a new supplier today takes an average of three weeks because everything is done via email and spreadsheets. We're losing potential vendors because of how painful our process is. The new system should support a self-service supplier portal that cuts onboarding to under five business days.",
+  "Wrapping up from Rachel. Final requirements: mobile approval capability for department heads who travel, automatic multi-currency conversion for our seven-country operation — manual currency conversion is costing us about forty hours per month — and a reporting dashboard that gives procurement leadership real-time spend visibility by category, supplier, and region.",
+];
+const BA_DEMO_SPEAKERS = [
+  "Rachel Torres", "Pat Singh", "Keiko Nakamura", "Rachel Torres",
+  "David Okafor", "Pat Singh", "Rachel Torres",
+];
+
+// ── SA (Solutions Architect / host) demo — vendor evaluation with competitor mentions ──
+const SA_DEMO_CHUNKS = [
+  "Thanks for making time today. I'm Chris Wagner, IT Director at Vantage Analytics. We're going through a formal vendor evaluation to replace our infrastructure monitoring platform. I want to walk you through where we are in the process and what we're looking for.",
+  "Right now we're running Nagios as our primary infrastructure monitoring system and it's become a serious liability. Every configuration change requires a full service restart, and the polling interval means we have a minimum four-minute blind spot on any issue. We had three major production incidents this year that Nagios either missed entirely or caught too late to prevent customer impact.",
+  "We ran a three-week proof of concept with Datadog earlier this year. The auto-discovery was genuinely impressive and the dashboards are the best I've seen. But the pricing at our scale is a real concern — at our current node count of about eight hundred hosts, we'd be looking at roughly one hundred eighty thousand dollars annually, which is considerably above our approved budget ceiling.",
+  "New Relic was also on our evaluation list. Their APM capabilities for application performance are solid. But they struggled with our on-premise VMware monitoring — their sales engineer acknowledged the platform is primarily designed for cloud-native environments. Since forty percent of our infrastructure is still on-premises, that's a dealbreaker for us.",
+  "Our engineering team internally proposed Prometheus and Grafana as a self-managed open source option. Two engineers built a proof of concept in about two weeks and technically it performs well. But the operational overhead of running it ourselves is significant — we'd need to hire at least one dedicated SRE just to own the stack, which we don't have budget for.",
+  "Dynatrace is our most serious contender right now. The demo we saw last month was impressive, particularly their AI-driven root cause analysis and automatic baselining. The main concern is implementation complexity — their professional services team estimated six to eight months for full deployment, which feels long given our timeline constraints.",
+  "So to summarize what we need: a solution that replaces Nagios within ninety days, covers both our on-premise VMware infrastructure and our AWS workloads without requiring a large internal team to maintain it, and fits within an annual budget of one hundred fifty thousand dollars. We need a recommendation within the next thirty days.",
+];
+const SA_DEMO_SPEAKERS = [
+  "Chris Wagner", "Chris Wagner", "Chris Wagner", "Chris Wagner",
+  "Chris Wagner", "Chris Wagner", "Chris Wagner",
+];
+const SA_DEMO_REFERENCE_PROJECTS = [
+  {
+    title: "Horizon Tech Observability Modernization",
+    description: "Replaced Nagios with Dynatrace across 2,200 hybrid hosts (VMware + AWS). Delivered AI-driven root cause analysis, auto-discovery, and custom SLO dashboards. Full deployment completed in eleven weeks.",
+    tags: ["Dynatrace", "Nagios", "Observability", "APM", "VMware", "AWS"],
+    industry: "Technology",
+    clientName: "Horizon Technology",
+    projectDate: "2025-09-12T00:00:00.000Z",
+  },
+  {
+    title: "Apex Finance Datadog Full-Stack Rollout",
+    description: "Deployed Datadog across hybrid AWS and on-premise infrastructure covering APM, log management, infrastructure monitoring, and custom anomaly detection. Replaced aging Nagios and Splunk deployments.",
+    tags: ["Datadog", "AWS", "APM", "Log Management", "Infrastructure Monitoring", "Nagios"],
+    industry: "Financial Services",
+    clientName: "Apex Finance",
+    projectDate: "2025-07-22T00:00:00.000Z",
+  },
+];
+
+// ── AE (Account Executive) demo reference projects — financial services Oracle migration ──
+const AE_DEMO_REFERENCE_PROJECTS = [
+  {
+    title: "FortifyBank Oracle Data Warehouse Migration",
+    description: "Migrated FortifyBank's 12-year-old Oracle data warehouse to Snowflake on Azure. Delivered FedRAMP-compliant architecture, automated OCC audit-ready reporting, and a 60% reduction in manual compliance exam preparation. Full engagement completed in six months.",
+    tags: ["Oracle", "Snowflake", "Azure", "FedRAMP", "SOC 2", "Data Warehouse", "Compliance", "Financial Services"],
+    industry: "Financial Services",
+    clientName: "FortifyBank",
+    projectDate: "2025-10-15T00:00:00.000Z",
+  },
+  {
+    title: "Crestview Wealth Management Data Platform",
+    description: "Replaced aging on-premise reporting infrastructure for a wealth management firm with a cloud-native data lake meeting SEC and FINRA compliance requirements. Automated audit trail generation cut compliance examination prep from four weeks to under forty-eight hours.",
+    tags: ["Cloud Migration", "Compliance", "SEC", "FINRA", "Data Lake", "Wealth Management", "Audit", "Oracle"],
+    industry: "Financial Services",
+    clientName: "Crestview Wealth",
+    projectDate: "2025-07-22T00:00:00.000Z",
+  },
+];
+
+// ── BA (Business Analyst) demo reference projects — procurement transformation ──
+const BA_DEMO_REFERENCE_PROJECTS = [
+  {
+    title: "Northgate Procurement System Transformation",
+    description: "Business analysis and requirements documentation for a multi-country procurement platform replacement. Delivered 120 functional requirements covering supplier onboarding, multi-currency workflows, SAP S/4HANA integration, role-based approval chains, and compliance audit trail requirements.",
+    tags: ["Procurement", "Business Analysis", "SAP S/4HANA", "ERP Integration", "Compliance", "Multi-Currency", "Supplier Portal", "Retail"],
+    industry: "Retail",
+    clientName: "Northgate Group",
+    projectDate: "2025-09-05T00:00:00.000Z",
+  },
+  {
+    title: "Allied Healthcare Procurement Analytics",
+    description: "Requirements gathering and process redesign for a healthcare procurement platform serving 200+ concurrent users. Captured requirements across purchasing workflows, vendor management, compliance reporting, PCI-DSS obligations, and finance system integration.",
+    tags: ["Procurement", "Healthcare", "Requirements Analysis", "PCI DSS", "Process Design", "Finance Integration", "Compliance"],
+    industry: "Healthcare",
+    clientName: "Allied Healthcare",
+    projectDate: "2025-06-18T00:00:00.000Z",
+  },
+];
+
+// ── PM (Project Manager / producer) demo reference projects — ERP migration ──
+const PM_DEMO_REFERENCE_PROJECTS = [
+  {
+    title: "Westfield Group Global ERP Consolidation",
+    description: "Program management for a seven-month ERP consolidation across five countries, migrating from legacy Oracle to SAP S/4HANA Cloud. Managed critical-path data migration, HRIS integration dependencies, phased hardware procurement, and a four-week parallel UAT program. Delivered on schedule.",
+    tags: ["ERP", "SAP S/4HANA", "Oracle", "Data Migration", "Program Management", "Global Rollout", "Risk Management"],
+    industry: "Retail",
+    clientName: "Westfield Group",
+    projectDate: "2025-08-20T00:00:00.000Z",
+  },
+  {
+    title: "Cascade Manufacturing ERP Modernization",
+    description: "Led program delivery for a nine-month Oracle-to-Microsoft Dynamics 365 migration for a manufacturing client. Coordinated hardware procurement timeline, vendor API dependencies, QA resource planning across parallel workstreams, and board-level steering committee reporting.",
+    tags: ["ERP", "Microsoft Dynamics 365", "Oracle", "Manufacturing", "Program Management", "Vendor Management", "Hardware Procurement"],
+    industry: "Manufacturing",
+    clientName: "Cascade Manufacturing",
+    projectDate: "2026-01-30T00:00:00.000Z",
+  },
+];
+
+// ── PM (Project Manager / producer) demo — project kickoff with dates and risks ──
+const PM_DEMO_CHUNKS = [
+  "Good afternoon everyone. I'm Janelle Brooks, program manager for the ERP migration program. Today's kickoff sets the foundation for the next seven months. I want everyone to leave today clear on key milestones, critical path dependencies, and where I need escalations.",
+  "Let me start with the hard dates. The board has approved October thirty-first as our go-live target. But finance needs the system operational by October first for the start of our new fiscal year — which means UAT sign-off needs to happen by September fifteenth. That is our real internal deadline and there is no flexibility on it.",
+  "The critical path bottleneck is data migration. We have eleven years of transactional data in the legacy Oracle system that needs to be cleansed, transformed, and loaded. The data team estimates eight weeks minimum for cleansing alone. Any slip in that stream cascades through every downstream phase. I need daily status reports from the data migration lead starting Monday.",
+  "I need to flag an immediate procurement risk. The hardware for the new environment must be ordered by end of this month to hit our supplier lead time. Finance approval for the purchase has been pending for three weeks. If that approval does not come through by this Friday, we miss the delivery window and the project slips by six weeks minimum. I need someone to escalate that today.",
+  "From the integration side — this is Marcus Chen — we have a hard dependency on our HRIS vendor completing their API update before we can migrate employee records. They committed to May first. But they already slipped once from their original March delivery. We need a contingency plan for that dependency that does not block the ERP go-live.",
+  "The testing phase is also at risk. We have four weeks allocated for regression and UAT starting September first. But our QA team is already committed to three other active projects in that same window. We are not adequately resourced to run parallel testing. I need to escalate this resource conflict to VP level this week before those commitments get further locked in.",
+  "Wrap-up and action items: hardware purchase escalation to finance by end of today. HRIS contingency plan from Marcus by next Friday. QA resource conflict escalation to VP by Thursday. Daily migration status starting Monday. If we lose more than two weeks on the critical path before August first, I will be requesting an emergency steering committee review.",
+];
+const PM_DEMO_SPEAKERS = [
+  "Janelle Brooks", "Janelle Brooks", "Janelle Brooks", "Janelle Brooks",
+  "Marcus Chen", "Janelle Brooks", "Janelle Brooks",
+];
+
 const METHODOLOGY_LABELS: Record<string, string> = {
   sandler: "Sandler Selling",
   meddic: "MEDDIC",
@@ -705,34 +828,67 @@ export default function Dashboard() {
       }
       // Key is present — clear any stale banner.
       setApiKeyMissing(false);
-      const isAE = settings?.hostRole === "account-executive";
+      const role = settings?.hostRole ?? "host";
 
-      if (isAE) {
-        demoChunksRef.current = AE_DEMO_CHUNKS;
-        demoAudioPrefixRef.current = "ae-demo";
-        demoSpeakersRef.current = AE_DEMO_SPEAKERS;
-        demoProjectIdsRef.current = [];
+      // Select role-specific demo content
+      let demoChunks: string[];
+      let demoSpeakers: string[];
+      let demoAudioPrefix: string;
+      let demoSessionTitle: string;
+      let demoClientName: string;
+      let demoIndustry: string | undefined;
+      let demoRefProjects: Array<{ title: string; description: string; tags: string[]; industry?: string; clientName?: string; projectDate?: string }> = [];
+
+      if (role === "account-executive") {
+        demoChunks = AE_DEMO_CHUNKS; demoSpeakers = AE_DEMO_SPEAKERS; demoAudioPrefix = "ae-demo";
+        demoSessionTitle = "Demo: Sales Discovery — Meridian Financial";
+        demoClientName = "Meridian Financial"; demoIndustry = "Financial Services";
+        demoRefProjects = AE_DEMO_REFERENCE_PROJECTS;
+      } else if (role === "correspondent") {
+        demoChunks = BA_DEMO_CHUNKS; demoSpeakers = BA_DEMO_SPEAKERS; demoAudioPrefix = "ba-demo";
+        demoSessionTitle = "Demo: Procurement Requirements Workshop";
+        demoClientName = "Northgate Group"; demoIndustry = "Retail";
+        demoRefProjects = BA_DEMO_REFERENCE_PROJECTS;
+      } else if (role === "producer") {
+        demoChunks = PM_DEMO_CHUNKS; demoSpeakers = PM_DEMO_SPEAKERS; demoAudioPrefix = "pm-demo";
+        demoSessionTitle = "Demo: ERP Migration Project Kickoff";
+        demoClientName = "Eastbridge Corp"; demoIndustry = "Manufacturing";
+        demoRefProjects = PM_DEMO_REFERENCE_PROJECTS;
+      } else if (role === "host") {
+        demoChunks = SA_DEMO_CHUNKS; demoSpeakers = SA_DEMO_SPEAKERS; demoAudioPrefix = "sa-demo";
+        demoSessionTitle = "Demo: Observability Platform Evaluation";
+        demoClientName = "Vantage Analytics"; demoIndustry = "Technology";
+        demoRefProjects = SA_DEMO_REFERENCE_PROJECTS;
       } else {
-        demoChunksRef.current = DEMO_CHUNKS;
-        demoAudioPrefixRef.current = "demo";
-        demoSpeakersRef.current = DEMO_SPEAKERS;
-        const createdIds: number[] = [];
-        for (const project of DEMO_REFERENCE_PROJECTS) {
-          try {
-            const res = await apiRequest("POST", "/api/reference-projects", project);
-            const created = await res.json();
-            createdIds.push(created.id);
-          } catch {}
-        }
-        demoProjectIdsRef.current = createdIds;
+        // engineer — cloud migration demo with audio
+        demoChunks = DEMO_CHUNKS; demoSpeakers = DEMO_SPEAKERS; demoAudioPrefix = "demo";
+        demoSessionTitle = "Demo: Cloud Migration Review";
+        demoClientName = "Contoso Ltd";
+        demoRefProjects = DEMO_REFERENCE_PROJECTS;
+      }
+
+      demoChunksRef.current = demoChunks;
+      demoAudioPrefixRef.current = demoAudioPrefix;
+      demoSpeakersRef.current = demoSpeakers;
+
+      const createdIds: number[] = [];
+      for (const project of demoRefProjects) {
+        try {
+          const res = await apiRequest("POST", "/api/reference-projects", project);
+          const created = await res.json();
+          createdIds.push(created.id);
+        } catch {}
+      }
+      demoProjectIdsRef.current = createdIds;
+      if (createdIds.length > 0) {
         queryClient.invalidateQueries({ queryKey: ["/api/reference-projects"] });
       }
 
-      const session = await createSessionMutation.mutateAsync(
-        isAE
-          ? { title: "Demo: Sales Discovery — Meridian Financial", clientName: "Meridian Financial", industry: "Financial Services" }
-          : { title: "Demo: Cloud Migration Review", clientName: "Contoso Ltd" }
-      );
+      const session = await createSessionMutation.mutateAsync({
+        title: demoSessionTitle,
+        clientName: demoClientName,
+        ...(demoIndustry ? { industry: demoIndustry } : {}),
+      });
       setIsListening(true);
       setIsDemoRunning(true);
       setDemoChunkIndex(0);
@@ -1530,7 +1686,7 @@ export default function Dashboard() {
             const LAYER_MAP: Record<string, string> = {
               infrastructure: "infra", cloud: "infra", networking: "infra", monitoring: "infra",
               data: "data", "ai-ml": "data",
-              development: "app", devops: "app", methodology: "app",
+              development: "app", devops: "app", methodology: "app", collaboration: "app",
               security: "security",
               integration: "integration",
             };
