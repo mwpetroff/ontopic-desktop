@@ -49,7 +49,7 @@ export default function Landing() {
               size="lg"
               className="px-8 text-sm font-semibold bg-white text-[#001178] hover:bg-white/90"
               data-testid="button-login-hero"
-              onClick={() => navigate("/sessions")}
+              onClick={() => navigate("/live")}
             >
               Get Started
             </Button>
