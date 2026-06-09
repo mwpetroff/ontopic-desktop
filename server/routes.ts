@@ -7,11 +7,11 @@ import { toFile } from "openai";
 import { detectAudioFormat } from "./replit_integrations/audio/client";
 import { z } from "zod";
 import { isAuthenticated } from "./auth";
-import { FeatureFlags, METHODOLOGY_STAGES } from "./constants";
+import { FeatureFlags, METHODOLOGY_STAGES, featuresForRole } from "./constants";
 import { openai, analyzeText, generateSummary, withRetry } from "./services/analysis";
 import type { AnalysisResult } from "./services/analysis";
 import type { SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, ReferenceProject, BANTData, MethodologyProgress } from "@shared/schema";
-import { resolveSpeaker, updateSessionTopics, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, persistSessionUpdates, mergeBantData, applyMethodologyStageUpdates } from "./analysis-helpers";
+import { resolveSpeaker, updateSessionTopics, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, persistSessionUpdates, mergeBantData, applyMethodologyStageUpdates, dedupeByText } from "./analysis-helpers";
 import { getTopicFrequency, getTopicTrends, getGapAnalysis, getNeedsVsOfferings, getDistinctIndustries, buildSessionGraph } from "./analytics";
 
 const audioBodyParser = express.json({ limit: "50mb" });
@@ -78,12 +78,13 @@ async function processAnalysis(
   const isAERole = hostRole === "account-executive";
   const methodologyStages = (isAERole && salesMethodology) ? METHODOLOGY_STAGES[salesMethodology] ?? [] : [];
 
-  if (isAERole) {
-    features.bantTracking = true;
-    if (salesMethodology && methodologyStages.length > 0) {
-      features.methodologyTracking = true;
-    }
-  }
+  // Role-driven features override any caller-supplied flags
+  const roleFeatures = featuresForRole(hostRole, salesMethodology);
+  features = { ...roleFeatures, ...features, bantTracking: roleFeatures.bantTracking, methodologyTracking: roleFeatures.methodologyTracking };
+
+  const existingActionItemsForPrompt = features.actionItems
+    ? ((session.actionItems || []) as ActionItem[]).map((a: ActionItem) => a.text)
+    : undefined;
 
   const analysis = await analyzeText(
     sessionId,
@@ -97,7 +98,8 @@ async function processAnalysis(
     analysisModel,
     competencyContext || undefined,
     referenceProjectContext || undefined,
-    methodologyStages.length > 0 ? methodologyStages : undefined
+    methodologyStages.length > 0 ? methodologyStages : undefined,
+    existingActionItemsForPrompt
   );
 
   const { newTopics, updatedTopics } = await updateSessionTopics(sessionId, analysis.terms);
@@ -132,7 +134,15 @@ async function processAnalysis(
   const existingFollowUps = (session.followUpQuestions || []) as FollowUpQuestion[];
   const newActionItems = analysis.actionItems || [];
   const newFollowUpQuestions = analysis.followUpQuestions || [];
-  const updatedActionItems = [...existingActionItems, ...newActionItems];
+  let updatedActionItems = [...existingActionItems, ...newActionItems];
+  if (analysis.actionItemOrder && analysis.actionItemOrder.length > 0) {
+    const orderMap = new Map(analysis.actionItemOrder.map((text, idx) => [text.toLowerCase().trim(), idx]));
+    updatedActionItems = updatedActionItems.sort((a, b) => {
+      const ia = orderMap.get(a.text.toLowerCase().trim()) ?? Infinity;
+      const ib = orderMap.get(b.text.toLowerCase().trim()) ?? Infinity;
+      return ia - ib;
+    });
+  }
   const updatedFollowUpQuestions = features.followUpQuestions
     ? [...existingFollowUps, ...newFollowUpQuestions].slice(-5)
     : existingFollowUps;
@@ -159,6 +169,29 @@ async function processAnalysis(
       )
     : null;
 
+  // Accumulate role-specific fields
+  type CompetitorMention = { name: string; context: string };
+  type TimelineSignal = { date: string; context: string; urgency?: string };
+  type RiskFlag = { text: string; type?: string };
+  type Requirement = { text: string; source?: string };
+  type PainPoint = { text: string; impact?: string };
+
+  const updatedCompetitorMentions = features.competitorMentions
+    ? dedupeByText([...(session.competitorMentions || []) as CompetitorMention[], ...(analysis.competitorMentions || [])], (m: CompetitorMention) => m.name.toLowerCase())
+    : undefined;
+  const updatedTimelineSignals = features.timelineSignals
+    ? [...(session.timelineSignals || []) as TimelineSignal[], ...(analysis.timelineSignals || [])]
+    : undefined;
+  const updatedRiskFlags = features.riskFlags
+    ? dedupeByText([...(session.riskFlags || []) as RiskFlag[], ...(analysis.riskFlags || [])], (r: RiskFlag) => r.text.toLowerCase().slice(0, 40))
+    : undefined;
+  const updatedRequirements = features.requirements
+    ? dedupeByText([...(session.requirements || []) as Requirement[], ...(analysis.requirements || [])], (r: Requirement) => r.text.toLowerCase().slice(0, 40))
+    : undefined;
+  const updatedPainPoints = features.painPoints
+    ? dedupeByText([...(session.painPoints || []) as PainPoint[], ...(analysis.painPoints || [])], (p: PainPoint) => p.text.toLowerCase().slice(0, 40))
+    : undefined;
+
   const allTopics = await storage.getTopicsBySession(sessionId);
   const formattedTranscript = `[${speaker}] ${transcriptText}`;
 
@@ -174,6 +207,11 @@ async function processAnalysis(
       ...(newSimilarMatches.length > 0 ? { similarProjectMatches: updatedSimilarMatches } : {}),
       ...(updatedBantData ? { bantData: updatedBantData } : {}),
       ...(updatedMethodologyProgress ? { methodologyProgress: updatedMethodologyProgress } : {}),
+      ...(updatedCompetitorMentions ? { competitorMentions: updatedCompetitorMentions } : {}),
+      ...(updatedTimelineSignals ? { timelineSignals: updatedTimelineSignals } : {}),
+      ...(updatedRiskFlags ? { riskFlags: updatedRiskFlags } : {}),
+      ...(updatedRequirements ? { requirements: updatedRequirements } : {}),
+      ...(updatedPainPoints ? { painPoints: updatedPainPoints } : {}),
     },
     formattedTranscript,
     transcriptText
@@ -195,6 +233,16 @@ async function processAnalysis(
     similarProjects: newSimilarMatches,
     bantData: updatedBantData,
     methodologyProgress: updatedMethodologyProgress,
+    competitorMentions: analysis.competitorMentions || [],
+    allCompetitorMentions: updatedCompetitorMentions || [],
+    timelineSignals: analysis.timelineSignals || [],
+    allTimelineSignals: updatedTimelineSignals || [],
+    riskFlags: analysis.riskFlags || [],
+    allRiskFlags: updatedRiskFlags || [],
+    requirements: analysis.requirements || [],
+    allRequirements: updatedRequirements || [],
+    painPoints: analysis.painPoints || [],
+    allPainPoints: updatedPainPoints || [],
   };
 }
 

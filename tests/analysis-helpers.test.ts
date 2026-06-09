@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveSpeaker, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, mergeBantData, applyMethodologyStageUpdates, persistSessionUpdates } from "../server/analysis-helpers";
+import { resolveSpeaker, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, mergeBantData, applyMethodologyStageUpdates, persistSessionUpdates, dedupeByText } from "../server/analysis-helpers";
 import { DatabaseStorage } from "../server/storage";
 import type { AnalysisResult } from "../server/services/analysis";
 import type { SentimentEntry, SpeakerEntry, ReferenceProject } from "@shared/schema";
@@ -394,5 +394,36 @@ describe("applyMethodologyStageUpdates", () => {
   it("ignores unknown stage IDs gracefully", () => {
     const result = applyMethodologyStageUpdates(null, ["unknown-stage"], "spin", spinStages, ts);
     expect(result.stages.every(s => !s.completed)).toBe(true);
+  });
+});
+
+describe("dedupeByText", () => {
+  it("returns all items when all keys are unique", () => {
+    const items = [{ text: "alpha" }, { text: "beta" }, { text: "gamma" }];
+    const result = dedupeByText(items, i => i.text);
+    expect(result).toHaveLength(3);
+  });
+
+  it("removes exact duplicate keys", () => {
+    const items = [{ text: "alpha" }, { text: "alpha" }, { text: "beta" }];
+    const result = dedupeByText(items, i => i.text);
+    expect(result).toHaveLength(2);
+    expect(result.map(i => i.text)).toEqual(["alpha", "beta"]);
+  });
+
+  it("keeps the first occurrence of a duplicate", () => {
+    const items = [{ text: "a", extra: 1 }, { text: "a", extra: 2 }];
+    const result = dedupeByText(items, i => i.text);
+    expect(result[0].extra).toBe(1);
+  });
+
+  it("works with a transformed key (lowercase)", () => {
+    const items = [{ name: "Salesforce" }, { name: "salesforce" }, { name: "HubSpot" }];
+    const result = dedupeByText(items, i => i.name.toLowerCase());
+    expect(result).toHaveLength(2);
+  });
+
+  it("returns empty array for empty input", () => {
+    expect(dedupeByText([], i => (i as any).text)).toEqual([]);
   });
 });

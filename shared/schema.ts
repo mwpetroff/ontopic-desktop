@@ -60,6 +60,11 @@ export const sessions = sqliteTable("sessions", {
   similarProjectMatches: text("similar_project_matches", { mode: "json" }).$type<Array<{ projectId: number; relevance: string; title?: string; industry?: string; clientName?: string; projectDate?: string }>>(),
   bantData: text("bant_data", { mode: "json" }).$type<BANTData>(),
   methodologyProgress: text("methodology_progress", { mode: "json" }).$type<MethodologyProgress>(),
+  competitorMentions: text("competitor_mentions", { mode: "json" }).$type<CompetitorMention[]>(),
+  timelineSignals: text("timeline_signals", { mode: "json" }).$type<TimelineSignal[]>(),
+  riskFlags: text("risk_flags", { mode: "json" }).$type<RiskFlag[]>(),
+  requirements: text("requirements", { mode: "json" }).$type<Requirement[]>(),
+  painPoints: text("pain_points", { mode: "json" }).$type<PainPoint[]>(),
   summary: text("summary"),
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
   endedAt: integer("ended_at", { mode: "timestamp" }),
@@ -212,6 +217,32 @@ export type Competency = typeof competencies.$inferSelect;
 export type InsertCompetency = z.infer<typeof insertCompetencySchema>;
 export type ReferenceProject = typeof referenceProjects.$inferSelect;
 export type InsertReferenceProject = z.infer<typeof insertReferenceProjectSchema>;
+
+export interface CompetitorMention {
+  name: string;
+  context: string;
+}
+
+export interface TimelineSignal {
+  date: string;
+  context: string;
+  urgency?: string;
+}
+
+export interface RiskFlag {
+  text: string;
+  type?: string;
+}
+
+export interface Requirement {
+  text: string;
+  source?: string;
+}
+
+export interface PainPoint {
+  text: string;
+  impact?: string;
+}
 
 export interface SimilarProjectMatch {
   projectId: number;

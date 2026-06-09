@@ -66,8 +66,14 @@ export interface AnalysisResult {
   speakerTitle?: string | null;
   sentiment?: { score: number; label: string };
   actionItems?: Array<{ text: string; assignee?: string; priority?: string }>;
+  actionItemOrder?: string[];
   followUpQuestions?: Array<{ question: string; context?: string }>;
   similarProjects?: Array<{ projectId: number; relevance: string }>;
+  competitorMentions?: Array<{ name: string; context: string }>;
+  timelineSignals?: Array<{ date: string; context: string; urgency?: string }>;
+  riskFlags?: Array<{ text: string; type?: string }>;
+  requirements?: Array<{ text: string; source?: string }>;
+  painPoints?: Array<{ text: string; impact?: string }>;
   bantUpdate?: {
     budget?: { value: string; evidence: string } | null;
     authority?: { value: string; evidence: string } | null;
@@ -86,7 +92,8 @@ export function buildAnalysisPrompt(
   industry?: string | null,
   competencyContext?: string,
   referenceProjectContext?: string,
-  methodologyStages?: MethodologyStageDefinition[]
+  methodologyStages?: MethodologyStageDefinition[],
+  existingActionItems?: string[]
 ) {
   const tasks = [
     "1. **Identify IT Terms**: Find key technical terms, tools, platforms, brands, frameworks, and methodologies. If no IT-specific terms are found, still extract notable discussion topics, product names, company names, or domain-specific terms.",
@@ -123,15 +130,38 @@ export function buildAnalysisPrompt(
 ${stageList}`);
     taskNum++;
   }
+  if (features.competitorMentions) {
+    tasks.push(`${taskNum}. **Identify Competitor / Incumbent Technology**: Note any vendor products, platforms, or tools currently in use at the client or being evaluated alongside your solution. Include only those explicitly mentioned as in-use or under consideration.`);
+    taskNum++;
+  }
+  if (features.timelineSignals) {
+    tasks.push(`${taskNum}. **Extract Timeline Signals**: Identify any specific dates, deadlines, milestones, go-live targets, or urgency signals. Capture what needs to happen by when.`);
+    taskNum++;
+  }
+  if (features.riskFlags) {
+    tasks.push(`${taskNum}. **Flag Risks & Dependencies**: Identify blockers, constraints, unresolved dependencies, or delivery risks explicitly mentioned. Include things that must happen before something else can proceed.`);
+    taskNum++;
+  }
+  if (features.requirements) {
+    tasks.push(`${taskNum}. **Extract Client Requirements**: Identify explicit needs, desired capabilities, and must-have outcomes stated by the client or prospect. These are what they want the solution to do — distinct from actions or tasks.`);
+    taskNum++;
+  }
+  if (features.painPoints) {
+    tasks.push(`${taskNum}. **Extract Pain Points**: Identify specific current-state problems, frustrations, failures, or gaps explicitly mentioned. Include any stated business impact where given.`);
+    taskNum++;
+  }
 
   let jsonShape = `{
-  "terms": [{"term":"...","definition":"...","category":"...","type":"concept|tool|industry","capabilitySource":"...","partnerName":"..."}],
+  "terms": [{"term":"...","definition":"...","category":"infrastructure|security|cloud|development|data|networking|methodology|business|ai-ml|devops|monitoring|collaboration|integration","type":"concept|tool|industry","capabilitySource":"...","partnerName":"..."}],
   "speaker": "Name or null",
   "speakerTitle": "Title/role or null",
   "sentiment": {"score": 0, "label": "neutral"}`;
 
   if (features.actionItems) {
     jsonShape += `,\n  "actionItems": [{"text":"...","assignee":"Name or null","priority":"high|medium|low"}]`;
+    if (existingActionItems && existingActionItems.length >= 2) {
+      jsonShape += `,\n  "actionItemOrder": ["full text of item that should be first","full text of item second",...]`;
+    }
   }
   if (features.followUpQuestions) {
     jsonShape += `,\n  "followUpQuestions": [{"question":"...","context":"brief reason this question matters"}]`;
@@ -144,6 +174,21 @@ ${stageList}`);
   }
   if (features.methodologyTracking && methodologyStages) {
     jsonShape += `,\n  "methodologyStageUpdates": ["stage-id-1", "stage-id-2"]`;
+  }
+  if (features.competitorMentions) {
+    jsonShape += `,\n  "competitorMentions": [{"name":"vendor/product name","context":"what they use it for or why it was mentioned"}]`;
+  }
+  if (features.timelineSignals) {
+    jsonShape += `,\n  "timelineSignals": [{"date":"specific date or timeframe","context":"what needs to happen by this date","urgency":"high|medium|low"}]`;
+  }
+  if (features.riskFlags) {
+    jsonShape += `,\n  "riskFlags": [{"text":"concise risk or blocker description","type":"dependency|risk|constraint|blocker"}]`;
+  }
+  if (features.requirements) {
+    jsonShape += `,\n  "requirements": [{"text":"requirement or desired outcome","source":"person name or 'client'"}]`;
+  }
+  if (features.painPoints) {
+    jsonShape += `,\n  "painPoints": [{"text":"specific problem or frustration","impact":"business impact if stated, else null"}]`;
   }
   jsonShape += "\n}";
 
@@ -171,9 +216,15 @@ ${knownSpeakers.length > 0 ? `Previously detected speakers in this session: ${kn
 
 For sentiment: Consider the tone, word choice, and context. Positive = optimism, agreement, excitement. Negative = concern, frustration, criticism, problems. Neutral = factual, informational.
 ${features.actionItems ? `\nFor action items: Only include concrete, actionable tasks mentioned or implied. Don't fabricate items not discussed. ${HOST_ROLE_ACTION_FOCUS[hostRole] || ""}` : ""}
+${features.actionItems && existingActionItems && existingActionItems.length >= 2 ? `\nExisting action items so far (in current order):\n${existingActionItems.map((t, i) => `${i + 1}. ${t}`).join("\n")}\nIf this chunk contains EXPLICIT dependency or sequencing language (e.g. "before we can do X", "first we need to", "that has to happen before", "prerequisite is"), return the full list in "actionItemOrder" with the dependent item moved earlier. Include ALL existing items plus any new ones you add. Omit "actionItemOrder" entirely if no sequencing language is detected.` : ""}
 ${features.followUpQuestions ? `\nFor follow-up questions: ${HOST_ROLE_FOLLOWUP_FOCUS[hostRole] || HOST_ROLE_FOLLOWUP_FOCUS.host}` : ""}
 ${features.similarProjects && referenceProjectContext ? `\n**Reference Library** (past projects to match against):\n${referenceProjectContext}\nIdentify 0-3 projects from this library that relate to the current discussion. Match on technologies, industry, use case, or problem domain. Only include genuinely relevant matches. Return their numeric projectId and a brief relevance explanation.` : ""}
 ${features.bantTracking ? `\nFor BANT: Extract only what is clearly stated in this chunk. Do not infer or hallucinate. Use short, factual summaries for values (e.g. "$500K annually", "CFO has final approval", "CRM consolidation and pipeline visibility", "Go live by Q3"). Use the prospect's own words as evidence quotes.` : ""}
+${features.competitorMentions ? `\nFor competitor mentions: Only include vendors/products explicitly named as currently deployed at the client or actively being evaluated. Omit passing references or hypothetical mentions. Keep context brief (under 15 words).` : ""}
+${features.timelineSignals ? `\nFor timeline signals: Capture specific dates, fiscal quarters, relative timeframes ("end of year", "before contract renewal"), and urgency language ("we need this by", "deadline is"). Rate urgency: high = hard deadline with consequences, medium = stated preference, low = aspirational.` : ""}
+${features.riskFlags ? `\nFor risk flags: Focus on what could block or slow delivery — dependencies on other teams/systems, missing approvals, technical unknowns, contractual constraints, or competing priorities. Be concise (under 20 words per item). type: dependency = must happen before this; blocker = prevents progress now; risk = might cause problems; constraint = limits options.` : ""}
+${features.requirements ? `\nFor requirements: Capture the client's stated needs as functional outcomes ("we need X to do Y") not implementation details. One clear sentence per item. source: use the speaker's name if identifiable, else "client".` : ""}
+${features.painPoints ? `\nFor pain points: Capture specific, named problems — not generic dissatisfaction. Each pain should describe what's broken/missing and, if stated, what business consequence it causes. Keep each under 25 words.` : ""}
 
 Return JSON:
 ${jsonShape}
@@ -193,7 +244,8 @@ export async function analyzeText(
   analysisModel: string = "gpt-4o-mini",
   competencyContext?: string,
   referenceProjectContext?: string,
-  methodologyStages?: MethodologyStageDefinition[]
+  methodologyStages?: MethodologyStageDefinition[],
+  existingActionItems?: string[]
 ): Promise<AnalysisResult> {
   return withRetry(
     async () => {
@@ -202,7 +254,7 @@ export async function analyzeText(
         messages: [
           {
             role: "system",
-            content: buildAnalysisPrompt(existingTerms, partnerList, knownSpeakers, features, hostRole, industry, competencyContext, referenceProjectContext, methodologyStages),
+            content: buildAnalysisPrompt(existingTerms, partnerList, knownSpeakers, features, hostRole, industry, competencyContext, referenceProjectContext, methodologyStages, existingActionItems),
           },
           {
             role: "user",

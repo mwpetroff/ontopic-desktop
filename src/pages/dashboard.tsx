@@ -19,19 +19,20 @@ import { HighlightedTranscript } from "@/components/highlighted-transcript";
 import { SentimentEqualizer, SentimentEqualizerFull } from "@/components/sentiment-equalizer";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
-import { ReorderableColumns, type ColumnDef } from "@/components/reorderable-columns";
 import {
   Activity, Square, Mic, MicOff, Loader2, AlertCircle, BookOpen,
   Play, ClipboardList, HelpCircle, Building2,
   Wrench, Lightbulb, Factory, Users, BarChart3, FolderOpen, ExternalLink,
   DollarSign, UserCheck, Target, Clock, CheckCircle2, Circle, TrendingUp,
-  Key, Speaker, X, Briefcase
+  Key, Speaker, X, Briefcase, ShieldAlert, CalendarClock, AlertTriangle,
+  ListChecks, Siren, Layers, Database, Server, Lock, Plug, Cpu, FileText
 } from "lucide-react";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { matchSpeaker } from "@/lib/speaker-match";
-import type { Session, Topic, VoiceProfile, SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, SimilarProjectMatch, ReferenceProject, BANTData, MethodologyProgress } from "@shared/schema";
+import type { Session, Topic, VoiceProfile, SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, SimilarProjectMatch, ReferenceProject, BANTData, MethodologyProgress, CompetitorMention, TimelineSignal, RiskFlag, Requirement, PainPoint } from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
 import { useSettings } from "@/hooks/use-settings";
 
@@ -177,14 +178,6 @@ export default function Dashboard() {
   const [demoAudioLevel, setDemoAudioLevel] = useState(0);
   const [sentimentData, setSentimentData] = useState<SentimentPoint[]>([]);
   const [overallSentiment, setOverallSentiment] = useState<number>(0);
-  const [enableActionItems, setEnableActionItems] = useState(true);
-  const [enableFollowUpQuestions, setEnableFollowUpQuestions] = useState(true);
-  const [showTranscript, setShowTranscript] = useState(true);
-  const [showTopics, setShowTopics] = useState(true);
-  const [showSentiment, setShowSentiment] = useState(true);
-  const [showSimilarProjects, setShowSimilarProjects] = useState(true);
-  const [showBant, setShowBant] = useState(true);
-  const [showMethodology, setShowMethodology] = useState(true);
   const [selectedMicId, setSelectedMicId] = useState("");
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [followUpQuestions, setFollowUpQuestions] = useState<FollowUpQuestion[]>([]);
@@ -192,6 +185,11 @@ export default function Dashboard() {
   const [similarProjects, setSimilarProjects] = useState<SimilarProjectMatch[]>([]);
   const [bantData, setBantData] = useState<BANTData | null>(null);
   const [methodologyProgress, setMethodologyProgress] = useState<MethodologyProgress | null>(null);
+  const [competitorMentions, setCompetitorMentions] = useState<CompetitorMention[]>([]);
+  const [timelineSignals, setTimelineSignals] = useState<TimelineSignal[]>([]);
+  const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [painPoints, setPainPoints] = useState<PainPoint[]>([]);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [showLowAudioWarning, setShowLowAudioWarning] = useState(false);
   const lowAudioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -212,7 +210,8 @@ export default function Dashboard() {
   const chunkSnapshotsRef = useRef<number[][]>([]);
 
   const { data: settings } = useSettings();
-  const isAEMode = settings?.hostRole === "account-executive";
+  const hostRole = settings?.hostRole ?? "host";
+  const isAEMode = hostRole === "account-executive";
 
   // Returns true if an API key is configured (Electron IPC or server API).
   async function checkApiKeyConfigured(): Promise<boolean> {
@@ -294,6 +293,11 @@ export default function Dashboard() {
       setFollowUpQuestions([]);
       setLiveSpeakers([]);
       setSimilarProjects([]);
+      setCompetitorMentions([]);
+      setTimelineSignals([]);
+      setRiskFlags([]);
+      setRequirements([]);
+      setPainPoints([]);
       queryClient.invalidateQueries({ queryKey: ["/api/sessions"] });
       navigate(`/sessions/${id}`);
     },
@@ -317,7 +321,9 @@ export default function Dashboard() {
         }
       }
 
-      if (data.actionItems && data.actionItems.length > 0) {
+      if (data.allActionItems) {
+        setActionItems(data.allActionItems);
+      } else if (data.actionItems && data.actionItems.length > 0) {
         setActionItems(prev => [...prev, ...data.actionItems]);
       }
 
@@ -346,6 +352,17 @@ export default function Dashboard() {
       if (data.methodologyProgress) {
         setMethodologyProgress(data.methodologyProgress);
       }
+
+      if (data.allCompetitorMentions) setCompetitorMentions(data.allCompetitorMentions);
+      else if (data.competitorMentions?.length) setCompetitorMentions(prev => [...prev, ...data.competitorMentions]);
+      if (data.allTimelineSignals) setTimelineSignals(data.allTimelineSignals);
+      else if (data.timelineSignals?.length) setTimelineSignals(prev => [...prev, ...data.timelineSignals]);
+      if (data.allRiskFlags) setRiskFlags(data.allRiskFlags);
+      else if (data.riskFlags?.length) setRiskFlags(prev => [...prev, ...data.riskFlags]);
+      if (data.allRequirements) setRequirements(data.allRequirements);
+      else if (data.requirements?.length) setRequirements(prev => [...prev, ...data.requirements]);
+      if (data.allPainPoints) setPainPoints(data.allPainPoints);
+      else if (data.painPoints?.length) setPainPoints(prev => [...prev, ...data.painPoints]);
 
       if (data.newTopics && data.newTopics.length > 0) {
         await refetchTopics();
@@ -384,16 +401,6 @@ export default function Dashboard() {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  const enableActionItemsRef = useRef(enableActionItems);
-  useEffect(() => {
-    enableActionItemsRef.current = enableActionItems;
-  }, [enableActionItems]);
-
-  const enableFollowUpQuestionsRef = useRef(enableFollowUpQuestions);
-  useEffect(() => {
-    enableFollowUpQuestionsRef.current = enableFollowUpQuestions;
-  }, [enableFollowUpQuestions]);
-
   const handleAnalysisResponseRef = useRef(handleAnalysisResponse);
   useEffect(() => {
     handleAnalysisResponseRef.current = handleAnalysisResponse;
@@ -423,11 +430,7 @@ export default function Dashboard() {
 
       const res = await apiRequest("POST", `/api/sessions/${session.id}/analyze`, {
         audio: base64,
-        features: {
-          actionItems: enableActionItemsRef.current,
-          followUpQuestions: enableFollowUpQuestionsRef.current,
-          similarProjects: true,
-        },
+        features: { actionItems: true, followUpQuestions: true, similarProjects: true },
         ...(speakerHint ? {
           voiceMatch: {
             name: speakerHint.profileName,
@@ -549,11 +552,7 @@ export default function Dashboard() {
         apiRequest("POST", `/api/sessions/${session.id}/demo-analyze`, {
           text: chunk,
           speaker,
-          features: {
-            actionItems: enableActionItems,
-            followUpQuestions: enableFollowUpQuestions,
-            similarProjects: true,
-          },
+          features: { actionItems: true, followUpQuestions: true, similarProjects: true },
         }),
         audioEnded,
       ]);
@@ -609,7 +608,7 @@ export default function Dashboard() {
         processDemoChunk(session, nextIdx);
       }, 2000);
     }
-  }, [handleAnalysisResponse, toast, enableActionItems, enableFollowUpQuestions]);
+  }, [handleAnalysisResponse, toast]);
 
   const handleStartSession = async () => {
     const liveKeyMissing = !(await checkApiKeyConfigured());
@@ -745,6 +744,11 @@ export default function Dashboard() {
       setSimilarProjects([]);
       setBantData(null);
       setMethodologyProgress(null);
+      setCompetitorMentions([]);
+      setTimelineSignals([]);
+      setRiskFlags([]);
+      setRequirements([]);
+      setPainPoints([]);
 
       demoAnimationRef.current = setInterval(() => {
         setDemoAudioLevel(Math.random() * 0.6 + 0.2);
@@ -949,48 +953,6 @@ export default function Dashboard() {
               onDeviceChange={setSelectedMicId}
             />
 
-            <Card className="p-3">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Show Features</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={showTranscript} onCheckedChange={setShowTranscript} data-testid="toggle-transcript" />
-                  <span className="text-xs">Transcript</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={showTopics} onCheckedChange={setShowTopics} data-testid="toggle-topics" />
-                  <span className="text-xs">Topics</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={showSentiment} onCheckedChange={setShowSentiment} data-testid="toggle-sentiment" />
-                  <span className="text-xs">Sentiment</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={showSimilarProjects} onCheckedChange={setShowSimilarProjects} data-testid="toggle-similar-projects" />
-                  <span className="text-xs">Similar Projects</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={enableActionItems} onCheckedChange={setEnableActionItems} data-testid="toggle-action-items" />
-                  <span className="text-xs">Action Items</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <Switch checked={enableFollowUpQuestions} onCheckedChange={setEnableFollowUpQuestions} data-testid="toggle-follow-up-questions" />
-                  <span className="text-xs">Follow-Ups</span>
-                </label>
-                {isAEMode && (
-                  <>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <Switch checked={showBant} onCheckedChange={setShowBant} data-testid="toggle-bant" />
-                      <span className="text-xs">BANT</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <Switch checked={showMethodology} onCheckedChange={setShowMethodology} data-testid="toggle-methodology" />
-                      <span className="text-xs">Methodology</span>
-                    </label>
-                  </>
-                )}
-              </div>
-            </Card>
-
             <Button
               onClick={handleStartSession}
               disabled={createSessionMutation.isPending}
@@ -1161,140 +1123,178 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* AE-mode pinned top row: Sales Questions | BANT | Sales Methodology | Salesforce Opp */}
-        {isAEMode && (
-          <div className="shrink-0 grid grid-cols-4 border-b border-border">
+        {/* ── AE mode: 50/50 command centre ───────────────────────────────── */}
+        {isAEMode ? (
+          <div className="flex flex-1 min-h-0">
 
-            {/* Sales Questions */}
-            <div className="flex flex-col border-r border-border overflow-hidden" data-testid="column-followups-ae">
+            {/* LEFT: Rolling transcript — enough to glance back */}
+            <div className="flex flex-col w-1/2 min-h-0 border-r border-border" data-testid="ae-transcript-pane">
               <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-card/50 shrink-0">
-                <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
-                <span className="text-xs font-semibold">Sales Questions</span>
-                {settings?.salesMethodology && (
-                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/40 text-primary font-medium">
-                    {METHODOLOGY_LABELS[settings.salesMethodology as string] ?? settings.salesMethodology}
-                  </Badge>
-                )}
-                <Switch
-                  checked={enableFollowUpQuestions}
-                  onCheckedChange={setEnableFollowUpQuestions}
-                  className="scale-[0.6] ml-auto"
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                  data-testid="toggle-follow-up-inline"
-                />
+                <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold">Transcript</span>
+                <div className="ml-auto flex items-center gap-2.5 flex-wrap justify-end">
+                  {liveSpeakers.slice(0, 6).map((s, i) => {
+                    const color = getSpeakerColorByIndex(i);
+                    return (
+                      <span key={s.name} className={`flex items-center gap-1 text-[10px] ${color.text}`}>
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-current opacity-80" />
+                        {s.name}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="overflow-y-auto">
-                <div className="p-2">
-                  {enableFollowUpQuestions ? (
-                    followUpQuestions.length > 0 ? (
-                      <FollowUpQuestionsPanel questions={followUpQuestions} />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-                        <HelpCircle className="h-5 w-5 text-muted-foreground/20 mb-2" />
-                        <p className="text-xs text-muted-foreground">Sales questions will appear as the call progresses.</p>
-                      </div>
-                    )
+              <ScrollArea className="flex-1">
+                <div className="p-4">
+                  {displayedTranscript ? (
+                    <>
+                      <HighlightedTranscript
+                        text={displayedTranscript}
+                        topics={topics}
+                        sessionStart={activeSession?.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession?.createdAt}
+                      />
+                      <div ref={transcriptEndRef} />
+                    </>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-                      <HelpCircle className="h-5 w-5 text-muted-foreground/10 mb-2" />
-                      <p className="text-xs text-muted-foreground">Follow-up questions are disabled. Toggle on above.</p>
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      {isDemoRunning ? (
+                        <>
+                          <Loader2 className="h-6 w-6 text-muted-foreground/30 mb-2 animate-spin" />
+                          <p className="text-xs text-muted-foreground">Starting demo...</p>
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="h-6 w-6 text-muted-foreground/20 mb-2" />
+                          <p className="text-xs text-muted-foreground">{isMuted ? "Microphone muted" : "Listening..."}</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
+              </ScrollArea>
             </div>
 
-            {/* BANT Qualification */}
-            <div className="flex flex-col border-r border-border" data-testid="column-bant-ae">
-              <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-card/50 shrink-0">
-                <Target className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-semibold">BANT Qualification</span>
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                  {bantData ? Object.values(bantData).filter(Boolean).length : 0}/4
-                </Badge>
-                <Switch
-                  checked={showBant}
-                  onCheckedChange={setShowBant}
-                  className="scale-[0.6] ml-auto"
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                  data-testid="toggle-bant-inline"
-                />
-              </div>
-              {showBant ? (
-              <div className="p-2 space-y-1.5">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex gap-0.5 flex-1">
+            {/* RIGHT RAIL: always-visible intelligence + detail tabs */}
+            <div className="flex flex-col w-1/2 min-h-0 overflow-hidden">
+
+              {/* BANT — 4 horizontal rows, label + value, no evidence */}
+              <div className="shrink-0 border-b border-border" data-testid="column-bant-ae">
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50">
+                  <Target className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-semibold">BANT Qualification</span>
+                  <div className="flex gap-0.5 flex-1 mx-2">
                     {BANT_KEYS.map(({ key }) => (
-                      <div key={key} className={`h-1.5 flex-1 rounded-full transition-colors duration-500 ${bantData?.[key] ? "bg-emerald-500" : "bg-muted"}`} />
+                      <div key={key} className={`h-1 flex-1 rounded-full transition-colors duration-500 ${bantData?.[key] ? "bg-emerald-500" : "bg-muted"}`} />
                     ))}
                   </div>
-                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                  <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
                     {bantData ? Object.values(bantData).filter(Boolean).length : 0}/4
                   </span>
                 </div>
-                {BANT_KEYS.map(({ key, label, icon: Icon, color }) => {
-                  const field = bantData?.[key];
-                  return (
-                    <div
-                      key={key}
-                      data-testid={`card-bant-${key}`}
-                      className={`rounded-md border p-2 transition-all duration-500 ${field ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/20" : "border-border bg-muted/10"}`}
-                    >
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <Icon className={`h-3 w-3 shrink-0 ${field ? color : "text-muted-foreground/30"}`} />
-                        <span className={`text-[10px] font-semibold ${field ? "text-foreground" : "text-muted-foreground/50"}`}>{label}</span>
-                        {field && <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500 ml-auto shrink-0" />}
+                <div className="px-3 py-1.5 space-y-1">
+                  {BANT_KEYS.map(({ key, label, icon: Icon, color }) => {
+                    const field = bantData?.[key];
+                    return (
+                      <div key={key} className="flex items-center gap-2 min-w-0" data-testid={`card-bant-${key}`}>
+                        <Icon className={`h-3 w-3 shrink-0 ${field ? color : "text-muted-foreground/25"}`} />
+                        <span className={`text-[10px] w-16 shrink-0 ${field ? "text-muted-foreground" : "text-muted-foreground/40"}`}>{label}</span>
+                        <span className={`text-[11px] font-medium flex-1 truncate ${field ? "text-foreground" : "text-muted-foreground/25 italic"}`}>
+                          {field ? field.value : "—"}
+                        </span>
+                        {field && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
                       </div>
-                      {field ? (
-                        <>
-                          <p className="text-[10px] font-medium text-foreground leading-tight" data-testid={`text-bant-${key}-value`}>{field.value}</p>
-                          {field.evidence && (
-                            <p className="text-[9px] text-muted-foreground italic mt-0.5 leading-tight">"{field.evidence}"</p>
-                          )}
-                          {field.history.length > 0 && (
-                            <p className="text-[9px] text-muted-foreground/40 mt-0.5">Was: {field.history[0].value}</p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-[9px] text-muted-foreground/35 leading-tight">Listening for signal...</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-                  <Target className="h-5 w-5 text-muted-foreground/10 mb-2" />
-                  <p className="text-xs text-muted-foreground">BANT hidden.</p>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-
-            {/* Sales Methodology */}
-            <div className="flex flex-col" data-testid="column-methodology-ae">
-              <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-card/50 shrink-0">
-                <TrendingUp className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-semibold">Sales Methodology</span>
-                {(methodologyProgress || settings?.salesMethodology) && (
-                  <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
-                    {METHODOLOGY_LABELS[(methodologyProgress?.methodology ?? settings?.salesMethodology) as string] ?? ""}
-                  </span>
-                )}
-                <Switch
-                  checked={showMethodology}
-                  onCheckedChange={setShowMethodology}
-                  className="scale-[0.6] ml-auto"
-                  onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                  onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                  data-testid="toggle-methodology-inline"
-                />
               </div>
-              {showMethodology ? (
-              <div className="p-2">
-                {(methodologyProgress || settings?.salesMethodology) ? (
-                  methodologyProgress ? (
+
+              {/* Action Items — text only, numbered, grows live */}
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "180px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-semibold">Action Items</span>
+                  {actionItems.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{actionItems.length}</Badge>
+                  )}
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-1">
+                    {actionItems.length > 0 ? (
+                      actionItems.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2 min-w-0">
+                          <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums pt-px">{i + 1}.</span>
+                          <span className="text-[11px] leading-snug text-foreground/90 min-w-0">{item.text}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground/50 py-2 text-center">Listening for commitments…</p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* Similar Projects — name + 1-line relevance, no tags */}
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "160px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <FolderOpen className="h-3.5 w-3.5 text-emerald-500" />
+                  <span className="text-xs font-semibold">Similar Projects</span>
+                  {consolidatedProjects.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{consolidatedProjects.length}</Badge>
+                  )}
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-2">
+                    {consolidatedProjects.length > 0 ? (
+                      consolidatedProjects.map((match) => {
+                        const project = referenceProjectsList.find(p => p.id === match.projectId);
+                        const title = match.title || project?.title || `Project #${match.projectId}`;
+                        const url = project?.url;
+                        return (
+                          <div key={match.projectId} className="min-w-0" data-testid={`card-similar-project-${match.projectId}`}>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[11px] font-semibold truncate" data-testid={`text-project-title-${match.projectId}`}>{title}</span>
+                              {url && (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0" data-testid={`link-project-${match.projectId}`}>
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-snug" data-testid={`text-project-relevance-${match.projectId}`}>{match.relevance}</p>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-muted-foreground/50 py-2 text-center">Projects surface as topics are detected.</p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* Tabs: detail-on-demand */}
+              <Tabs defaultValue="salesqs" className="flex-1 min-h-0 flex flex-col">
+                <div className="px-2 pt-2 pb-0 shrink-0">
+                  <TabsList className="h-7 w-full grid grid-cols-5">
+                    <TabsTrigger value="salesqs" className="text-[10px] px-0 h-6" data-testid="tab-ae-salesqs">Qs</TabsTrigger>
+                    <TabsTrigger value="methodology" className="text-[10px] px-0 h-6" data-testid="tab-ae-methodology">Method</TabsTrigger>
+                    <TabsTrigger value="salesforce" className="text-[10px] px-0 h-6" data-testid="tab-ae-salesforce">SF Opp</TabsTrigger>
+                    <TabsTrigger value="topics" className="text-[10px] px-0 h-6" data-testid="tab-ae-topics">Topics</TabsTrigger>
+                    <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6" data-testid="tab-ae-sentiment">Sentiment</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="salesqs" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {followUpQuestions.length > 0 ? (
+                    <FollowUpQuestionsPanel questions={followUpQuestions} />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                      <HelpCircle className="h-5 w-5 text-muted-foreground/20 mb-2" />
+                      <p className="text-xs text-muted-foreground">Questions will appear as the call progresses.</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="methodology" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {methodologyProgress ? (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -1305,416 +1305,486 @@ export default function Dashboard() {
                         </span>
                       </div>
                       {methodologyProgress.stages.map(stage => (
-                        <div
-                          key={stage.id}
-                          className={`flex items-center gap-1.5 transition-all duration-300 ${stage.completed ? "opacity-100" : "opacity-40"}`}
-                          data-testid={`stage-${stage.id}`}
-                        >
+                        <div key={stage.id} className={`flex items-center gap-1.5 transition-all duration-300 ${stage.completed ? "opacity-100" : "opacity-40"}`} data-testid={`stage-${stage.id}`}>
                           {stage.completed
                             ? <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
                             : <Circle className="h-3 w-3 text-muted-foreground shrink-0" />}
-                          <span className={`text-[10px] ${stage.completed ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                            {stage.name}
-                          </span>
+                          <span className={`text-[10px] ${stage.completed ? "font-medium text-foreground" : "text-muted-foreground"}`}>{stage.name}</span>
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  ) : settings?.salesMethodology ? (
                     <div>
-                      <p className="text-[10px] font-semibold text-foreground mb-1">
-                        {METHODOLOGY_LABELS[settings?.salesMethodology as string] ?? settings?.salesMethodology}
-                      </p>
+                      <p className="text-[10px] font-semibold text-foreground mb-1">{METHODOLOGY_LABELS[settings.salesMethodology as string] ?? settings.salesMethodology}</p>
                       <p className="text-[9px] text-muted-foreground/50">Stages will appear as analysis progresses.</p>
                     </div>
-                  )
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                      <TrendingUp className="h-5 w-5 text-muted-foreground/20 mb-2" />
+                      <p className="text-xs text-muted-foreground">No methodology selected.</p>
+                      <p className="text-[10px] text-muted-foreground/60 mt-0.5">Configure in Settings.</p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="salesforce" className="flex-1 min-h-0 overflow-y-auto mt-0 data-[state=inactive]:hidden">
+                  <div className="px-3 py-2 space-y-1.5">
+                    {([
+                      { label: "Opportunity", value: activeSession?.title || sessionTitle || null },
+                      { label: "Account", value: activeSession?.clientName || clientName || null },
+                      { label: "Stage", value: (activeSession || isListening) ? "Discovery" : null },
+                      { label: "Amount", value: bantData?.budget?.value || null },
+                      { label: "Timeline", value: bantData?.timeline?.value || null },
+                      { label: "Contact", value: liveSpeakers.find(s => s.role !== "host")?.name || null },
+                      { label: "Decision Maker", value: bantData?.authority?.value || null },
+                    ] as Array<{ label: string; value: string | null }>).map(({ label, value }) => (
+                      <div key={label} className="flex items-start gap-2">
+                        <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wide font-medium w-24 shrink-0 pt-px">{label}</span>
+                        <span className={`text-[11px] leading-snug break-words min-w-0 ${value ? "text-foreground font-medium" : "text-muted-foreground/25 italic"}`}>
+                          {value || "—"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {topics.length > 0 ? (
+                    <DashboardTopicGroups
+                      toolTopics={toolTopics}
+                      conceptTopics={conceptTopics}
+                      industryTopics={industryTopics}
+                      newTopicIds={newTopicIds}
+                      sessionId={activeSession?.id}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                      <AlertCircle className="h-6 w-6 text-muted-foreground/20 mb-2" />
+                      <p className="text-xs text-muted-foreground">
+                        {isDemoRunning ? "Terms appear as the conversation plays..." : "IT terms will appear here as detected."}
+                      </p>
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="sentiment" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {sentimentData.length > 0 ? (
+                    <SentimentEqualizerFull
+                      sentimentData={sentimentData}
+                      overallSentiment={overallSentiment}
+                      sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center px-3">
+                      <BarChart3 className="h-6 w-6 text-muted-foreground/20 mb-2" />
+                      <p className="text-xs text-muted-foreground">Sentiment will appear as the conversation progresses.</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+
+            </div>
+          </div>
+
+        ) : (
+
+        /* ── Role-specific 50/50 layouts ─────────────────────────────────── */
+        <div className="flex flex-1 min-h-0">
+
+          {/* LEFT: Transcript (all roles) */}
+          <div className="flex flex-col w-1/2 min-h-0 border-r border-border" data-testid="role-transcript-pane">
+            <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-card/50 shrink-0">
+              <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold">Transcript</span>
+              <div className="ml-auto flex items-center gap-2.5 flex-wrap justify-end">
+                {liveSpeakers.slice(0, 6).map((s, i) => {
+                  const color = getSpeakerColorByIndex(i);
+                  return (
+                    <span key={s.name} className={`flex items-center gap-1 text-[10px] ${color.text}`}>
+                      <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-current opacity-80" />
+                      {s.name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-4">
+                {displayedTranscript ? (
+                  <>
+                    <HighlightedTranscript
+                      text={displayedTranscript}
+                      topics={topics}
+                      sessionStart={activeSession?.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession?.createdAt}
+                    />
+                    <div ref={transcriptEndRef} />
+                  </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-6 text-center px-3">
-                    <TrendingUp className="h-5 w-5 text-muted-foreground/20 mb-2" />
-                    <p className="text-xs text-muted-foreground">No methodology selected.</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">Configure in Studio Settings.</p>
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    {isDemoRunning ? (
+                      <><Loader2 className="h-6 w-6 text-muted-foreground/30 mb-2 animate-spin" /><p className="text-xs text-muted-foreground">Starting demo...</p></>
+                    ) : (
+                      <><Mic className="h-6 w-6 text-muted-foreground/20 mb-2" /><p className="text-xs text-muted-foreground">{isMuted ? "Microphone muted" : "Listening..."}</p></>
+                    )}
                   </div>
                 )}
               </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center px-3">
-                  <TrendingUp className="h-5 w-5 text-muted-foreground/10 mb-2" />
-                  <p className="text-xs text-muted-foreground">Methodology hidden.</p>
+            </ScrollArea>
+          </div>
+
+          {/* RIGHT: Role-specific intelligence */}
+          {hostRole === "host" && (
+            /* ── SA: Follow-up questions hero + Competitor signals + Topics + Tabs ── */
+            <div className="flex flex-col w-1/2 min-h-0 overflow-hidden" data-testid="role-rail-sa">
+
+              {competitorMentions.length > 0 && (
+                <div className="shrink-0 border-b border-border">
+                  <div className="px-3 py-2 flex items-center gap-2 bg-amber-50/60 dark:bg-amber-950/20">
+                    <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-xs font-semibold">Competitor / Incumbent Signals</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-auto">{competitorMentions.length}</Badge>
+                  </div>
+                  <div className="px-3 py-1.5 space-y-1">
+                    {competitorMentions.slice(-4).map((m, i) => (
+                      <div key={i} className="flex items-start gap-2 min-w-0">
+                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 shrink-0">{m.name}</span>
+                        <span className="text-[10px] text-muted-foreground leading-snug min-w-0 truncate">{m.context}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Salesforce Opportunity */}
-            <div className="flex flex-col overflow-hidden" data-testid="column-sf-opp-ae">
-              <div className="px-3 py-2 border-b border-border flex items-center gap-2 bg-card/50 shrink-0">
-                <Briefcase className="h-3.5 w-3.5 text-[#00A1E0]" />
-                <span className="text-xs font-semibold">Salesforce Opp</span>
-                {(() => {
-                  const filled = [
-                    activeSession?.clientName || clientName,
-                    bantData?.budget?.value,
-                    bantData?.timeline?.value,
-                    bantData?.authority?.value,
-                    liveSpeakers.find(s => s.role !== "host")?.name,
-                  ].filter(Boolean).length;
-                  return filled > 0 ? (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-auto">{filled}/5</Badge>
-                  ) : null;
-                })()}
-              </div>
-              <div className="p-2 space-y-1.5 overflow-y-auto">
-                {([
-                  { label: "Opportunity", value: activeSession?.title || sessionTitle || null },
-                  { label: "Account", value: activeSession?.clientName || clientName || null },
-                  { label: "Stage", value: (activeSession || isListening) ? "Discovery" : null },
-                  { label: "Amount", value: bantData?.budget?.value || null },
-                  { label: "Timeline", value: bantData?.timeline?.value || null },
-                  { label: "Contact", value: liveSpeakers.find(s => s.role !== "host")?.name || null },
-                  { label: "Decision Maker", value: bantData?.authority?.value || null },
-                ] as Array<{ label: string; value: string | null }>).map(({ label, value }) => (
-                  <div key={label} className="flex items-start gap-1.5">
-                    <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide font-medium w-[72px] shrink-0 pt-[1px]">{label}</span>
-                    <span className={`text-[10px] leading-snug break-words min-w-0 ${value ? "text-foreground font-medium" : "text-muted-foreground/30 italic"}`}>
-                      {value || "listening…"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        <ReorderableColumns
-          storageKey={isAEMode ? "dashboard-grid-ae" : "dashboard-grid"}
-          rows={2}
-          columns={[
-            {
-              id: "transcript",
-              header: (
-                <>
-                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-semibold">Transcript</span>
-                  <Switch
-                    checked={showTranscript}
-                    onCheckedChange={setShowTranscript}
-                    className="scale-[0.6] ml-auto"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    data-testid="toggle-transcript-inline"
-                  />
-                </>
-              ),
-              content: showTranscript ? (
-                <ScrollArea className="flex-1">
-                  <div className="p-3">
-                    {displayedTranscript ? (
-                      <div>
-                        <HighlightedTranscript text={displayedTranscript} topics={topics} />
-                        <div ref={transcriptEndRef} />
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-16 text-center">
-                        {isDemoRunning ? (
-                          <>
-                            <Loader2 className="h-6 w-6 text-muted-foreground/30 mb-2 animate-spin" />
-                            <p className="text-xs text-muted-foreground">Starting demo...</p>
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                            <p className="text-xs text-muted-foreground">
-                              {isMuted ? "Microphone muted" : "Listening..."}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <BookOpen className="h-6 w-6 text-muted-foreground/10 mb-2" />
-                  <p className="text-xs text-muted-foreground">Transcript hidden.</p>
-                </div>
-              ),
-            },
-            {
-              id: "topics",
-              header: (
-                <>
-                  <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-semibold">Topics</span>
-                  {topics.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{topics.length}</Badge>
-                  )}
-                  {topics.length > 0 && (
-                    <span className="text-[9px] text-muted-foreground ml-auto">
-                      {toolCount}T {conceptCount}C{industryCount > 0 ? ` ${industryCount}I` : ""}
-                    </span>
-                  )}
-                  <Switch
-                    checked={showTopics}
-                    onCheckedChange={setShowTopics}
-                    className="scale-[0.6] ml-auto"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    data-testid="toggle-topics-inline"
-                  />
-                </>
-              ),
-              content: showTopics ? (
-                <ScrollArea className="flex-1">
-                  <div className="p-2 space-y-1.5">
-                    {topics.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                        <AlertCircle className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                        <p className="text-xs text-muted-foreground">
-                          {isDemoRunning
-                            ? "Terms appear as the conversation plays..."
-                            : "IT terms will appear here as detected."}
-                        </p>
-                      </div>
-                    ) : (
-                      <DashboardTopicGroups
-                        toolTopics={toolTopics}
-                        conceptTopics={conceptTopics}
-                        industryTopics={industryTopics}
-                        newTopicIds={newTopicIds}
-                        sessionId={activeSession?.id}
-                      />
-                    )}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <AlertCircle className="h-6 w-6 text-muted-foreground/10 mb-2" />
-                  <p className="text-xs text-muted-foreground">Topics hidden.</p>
-                </div>
-              ),
-            },
-            {
-              id: "followups",
-              header: (
-                <>
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "200px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
                   <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
-                  <span className="text-xs font-semibold">{isAEMode ? "Sales Questions" : "Follow-Up Questions"}</span>
-                  {isAEMode && settings?.salesMethodology && (
-                    <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/40 text-primary font-medium">
-                      {METHODOLOGY_LABELS[settings.salesMethodology as string] ?? settings.salesMethodology}
-                    </Badge>
-                  )}
-                  <Switch
-                    checked={enableFollowUpQuestions}
-                    onCheckedChange={setEnableFollowUpQuestions}
-                    className="scale-[0.6] ml-auto"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    data-testid="toggle-follow-up-inline"
-                  />
-                </>
-              ),
-              content: (
-                <ScrollArea className="flex-1">
-                  <div className="p-2">
-                    {enableFollowUpQuestions ? (
-                      followUpQuestions.length > 0 ? (
-                        <FollowUpQuestionsPanel questions={followUpQuestions} />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                          <HelpCircle className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                          <p className="text-xs text-muted-foreground">
-                            PreSales questions will appear here based on the conversation.
-                          </p>
-                        </div>
-                      )
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                        <HelpCircle className="h-6 w-6 text-muted-foreground/10 mb-2" />
-                        <p className="text-xs text-muted-foreground">
-                          Follow-up questions are disabled. Toggle on above.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              ),
-            },
-            {
-              id: "sentiment",
-              header: (
-                <>
-                  <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-semibold">Sentiment</span>
-                  {sentimentData.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{sentimentData.length}</Badge>
-                  )}
-                  <Switch
-                    checked={showSentiment}
-                    onCheckedChange={setShowSentiment}
-                    className="scale-[0.6] ml-auto"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    data-testid="toggle-sentiment-inline"
-                  />
-                </>
-              ),
-              content: showSentiment ? (
-                <ScrollArea className="flex-1">
-                  <div className="p-2">
-                    {sentimentData.length > 0 ? (
-                      <SentimentEqualizerFull
-                        sentimentData={sentimentData}
-                        overallSentiment={overallSentiment}
-                        sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt}
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                        <BarChart3 className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                        <p className="text-xs text-muted-foreground">
-                          Sentiment analysis will appear here as the conversation progresses.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <BarChart3 className="h-6 w-6 text-muted-foreground/10 mb-2" />
-                  <p className="text-xs text-muted-foreground">Sentiment hidden.</p>
+                  <span className="text-xs font-semibold">Follow-Up Questions</span>
                 </div>
-              ),
-            },
-            {
-              id: "actionitems",
-              header: (
-                <>
-                  <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs font-semibold">Action Items</span>
-                  {actionItems.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{actionItems.length}</Badge>
-                  )}
-                  <Switch
-                    checked={enableActionItems}
-                    onCheckedChange={setEnableActionItems}
-                    className="scale-[0.6] ml-auto"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    data-testid="toggle-action-items-inline"
-                  />
-                </>
-              ),
-              content: (
                 <ScrollArea className="flex-1">
                   <div className="p-2">
-                    {enableActionItems ? (
-                      actionItems.length > 0 ? (
-                        <ActionItemsPanel items={actionItems} compact />
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                          <ClipboardList className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                          <p className="text-xs text-muted-foreground">
-                            Action items will appear here as they're detected in the conversation.
-                          </p>
-                        </div>
-                      )
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                        <ClipboardList className="h-6 w-6 text-muted-foreground/10 mb-2" />
-                        <p className="text-xs text-muted-foreground">
-                          Action items are disabled. Toggle on above.
-                        </p>
-                      </div>
-                    )}
+                    {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-3 text-center">Questions surface as the conversation progresses.</p>}
                   </div>
                 </ScrollArea>
-              ),
-            },
-            {
-              id: "similarprojects",
-              header: (
-                <>
-                  <FolderOpen className="h-3.5 w-3.5 text-emerald-500" />
-                  <span className="text-xs font-semibold">Similar Projects</span>
-                  {consolidatedProjects.length > 0 && (
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{consolidatedProjects.length}</Badge>
-                  )}
-                  <Switch
-                    checked={showSimilarProjects}
-                    onCheckedChange={setShowSimilarProjects}
-                    className="scale-[0.6] ml-auto"
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-                    data-testid="toggle-similar-projects-inline"
-                  />
-                </>
-              ),
-              content: showSimilarProjects ? (
+              </div>
+
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "240px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <AlertCircle className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-semibold">Detected Topics</span>
+                  {topics.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{topics.length}</Badge>}
+                </div>
                 <ScrollArea className="flex-1">
-                  <div className="p-2 space-y-2">
-                    {consolidatedProjects.length > 0 ? (
-                      consolidatedProjects.map((match) => {
-                        const project = referenceProjectsList.find(p => p.id === match.projectId);
-                        const title = match.title || project?.title || `Project #${match.projectId}`;
-                        const industry = match.industry || project?.industry;
-                        const clientName = match.clientName || project?.clientName;
-                        const projectDate = match.projectDate || project?.projectDate;
-                        const url = project?.url;
-                        const tags = project?.tags;
+                  <div className="p-2">
+                    {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-3 text-center">{isDemoRunning ? "Terms appear as conversation plays..." : "IT terms will appear here as detected."}</p>}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <Tabs defaultValue="actions" className="flex-1 min-h-0 flex flex-col">
+                <div className="px-2 pt-2 pb-0 shrink-0">
+                  <TabsList className="h-7 w-full grid grid-cols-4">
+                    <TabsTrigger value="actions" className="text-[10px] px-0 h-6">Actions</TabsTrigger>
+                    <TabsTrigger value="projects" className="text-[10px] px-0 h-6">Projects</TabsTrigger>
+                    <TabsTrigger value="methodology" className="text-[10px] px-0 h-6">Method</TabsTrigger>
+                    <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="actions" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {actionItems.length > 0 ? <ActionItemsPanel items={actionItems} compact /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Action items will appear here.</p>}
+                </TabsContent>
+                <TabsContent value="projects" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 space-y-2 data-[state=inactive]:hidden">
+                  {consolidatedProjects.length > 0 ? consolidatedProjects.map((match) => {
+                    const project = referenceProjectsList.find(p => p.id === match.projectId);
+                    const title = match.title || project?.title || `Project #${match.projectId}`;
+                    return (
+                      <div key={match.projectId} className="min-w-0">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[11px] font-semibold truncate">{title}</span>
+                          {project?.url && <a href={project.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-muted-foreground hover:text-foreground"><ExternalLink className="h-3 w-3" /></a>}
+                        </div>
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-snug">{match.relevance}</p>
+                      </div>
+                    );
+                  }) : <p className="text-xs text-muted-foreground/50 py-4 text-center">Projects surface as topics are detected.</p>}
+                </TabsContent>
+                <TabsContent value="methodology" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {methodologyProgress ? (
+                    <div className="space-y-1">
+                      {methodologyProgress.stages.map(stage => (
+                        <div key={stage.id} className={`flex items-center gap-1.5 ${stage.completed ? "opacity-100" : "opacity-40"}`}>
+                          {stage.completed ? <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> : <Circle className="h-3 w-3 text-muted-foreground shrink-0" />}
+                          <span className={`text-[10px] ${stage.completed ? "font-medium text-foreground" : "text-muted-foreground"}`}>{stage.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-xs text-muted-foreground/50 py-4 text-center">No methodology selected. Configure in Settings.</p>}
+                </TabsContent>
+                <TabsContent value="sentiment" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {sentimentData.length > 0 ? <SentimentEqualizerFull sentimentData={sentimentData} overallSentiment={overallSentiment} sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Sentiment will appear as the conversation progresses.</p>}
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {hostRole === "engineer" && (() => {
+            const LAYER_MAP: Record<string, string> = {
+              infrastructure: "infra", cloud: "infra", networking: "infra", monitoring: "infra",
+              data: "data", "ai-ml": "data",
+              development: "app", devops: "app", methodology: "app",
+              security: "security",
+              integration: "integration",
+            };
+            const LAYER_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+              app:         { label: "Application",   icon: <Cpu className="h-3 w-3" />,      color: "text-blue-500" },
+              data:        { label: "Data & AI",     icon: <Database className="h-3 w-3" />, color: "text-purple-500" },
+              infra:       { label: "Infra & Cloud", icon: <Server className="h-3 w-3" />,   color: "text-emerald-500" },
+              security:    { label: "Security",      icon: <Lock className="h-3 w-3" />,     color: "text-red-500" },
+              integration: { label: "Integration",   icon: <Plug className="h-3 w-3" />,     color: "text-orange-500" },
+              other:       { label: "Other",         icon: <Lightbulb className="h-3 w-3" />, color: "text-muted-foreground" },
+            };
+            const byLayer: Record<string, Topic[]> = {};
+            for (const t of topics) {
+              const layer = LAYER_MAP[t.category] ?? "other";
+              (byLayer[layer] = byLayer[layer] || []).push(t);
+            }
+            const layerOrder = ["app", "data", "infra", "security", "integration", "other"];
+            return (
+              <div className="flex flex-col w-1/2 min-h-0 overflow-hidden" data-testid="role-rail-se">
+                <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "260px" }}>
+                  <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                    <Layers className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-semibold">Tech Stack</span>
+                    {topics.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{topics.filter(t => t.type === "tool").length} tools</Badge>}
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="px-3 py-2 space-y-2">
+                      {layerOrder.filter(l => byLayer[l]?.length).map(layer => {
+                        const meta = LAYER_META[layer];
                         return (
-                          <div key={match.projectId} className="rounded-md border border-border bg-background p-2" data-testid={`card-similar-project-${match.projectId}`}>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-semibold truncate" data-testid={`text-project-title-${match.projectId}`}>{title}</span>
-                                  {url && (
-                                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0" data-testid={`link-project-${match.projectId}`}>
-                                      <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                  )}
-                                </div>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {industry && <>{industry}{clientName ? ` · ${clientName}` : ""}</>}
-                                  {projectDate && (
-                                    <>{industry ? " · " : ""}{new Date(projectDate).toLocaleDateString("en-US", { year: "numeric", month: "short" })}</>
-                                  )}
-                                </span>
-                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 italic" data-testid={`text-project-relevance-${match.projectId}`}>{match.relevance}</p>
-                              </div>
+                          <div key={layer}>
+                            <div className={`flex items-center gap-1.5 mb-1 ${meta.color}`}>
+                              {meta.icon}
+                              <span className="text-[9px] font-semibold uppercase tracking-wide">{meta.label}</span>
                             </div>
-                            {tags && tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {tags.slice(0, 5).map((tag) => (
-                                  <Badge key={tag} variant="outline" className="text-[9px] h-3.5 px-1">{tag}</Badge>
-                                ))}
-                              </div>
-                            )}
+                            <div className="flex flex-wrap gap-1">
+                              {byLayer[layer].map(t => (
+                                <Badge key={t.id} variant={newTopicIds.has(t.id) ? "default" : "outline"} className="text-[10px] h-5 px-1.5">{t.term}</Badge>
+                              ))}
+                            </div>
                           </div>
                         );
-                      })
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-16 text-center px-3">
-                        <FolderOpen className="h-6 w-6 text-muted-foreground/20 mb-2" />
-                        <p className="text-xs text-muted-foreground">
-                          Similar projects from your reference library will appear here as topics are detected.
-                        </p>
+                      })}
+                      {topics.length === 0 && <p className="text-xs text-muted-foreground/50 py-3 text-center">{isDemoRunning ? "Stack populates as terms are detected..." : "Technology stack appears here."}</p>}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "200px" }}>
+                  <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                    <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-xs font-semibold">Follow-Up Questions</span>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-2">
+                      {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-3 text-center">Technical questions surface as the call progresses.</p>}
+                    </div>
+                  </ScrollArea>
+                </div>
+                <Tabs defaultValue="topics" className="flex-1 min-h-0 flex flex-col">
+                  <div className="px-2 pt-2 pb-0 shrink-0">
+                    <TabsList className="h-7 w-full grid grid-cols-4">
+                      <TabsTrigger value="topics" className="text-[10px] px-0 h-6">All Topics</TabsTrigger>
+                      <TabsTrigger value="actions" className="text-[10px] px-0 h-6">Actions</TabsTrigger>
+                      <TabsTrigger value="projects" className="text-[10px] px-0 h-6">Projects</TabsTrigger>
+                      <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
+                    </TabsList>
+                  </div>
+                  <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                    {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}
+                  </TabsContent>
+                  <TabsContent value="actions" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                    {actionItems.length > 0 ? <ActionItemsPanel items={actionItems} compact /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Action items will appear here.</p>}
+                  </TabsContent>
+                  <TabsContent value="projects" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 space-y-2 data-[state=inactive]:hidden">
+                    {consolidatedProjects.length > 0 ? consolidatedProjects.map((match) => {
+                      const project = referenceProjectsList.find(p => p.id === match.projectId);
+                      const title = match.title || project?.title || `Project #${match.projectId}`;
+                      return (<div key={match.projectId} className="min-w-0"><span className="text-[11px] font-semibold truncate block">{title}</span><p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-snug">{match.relevance}</p></div>);
+                    }) : <p className="text-xs text-muted-foreground/50 py-4 text-center">Similar projects surface as topics are detected.</p>}
+                  </TabsContent>
+                  <TabsContent value="sentiment" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                    {sentimentData.length > 0 ? <SentimentEqualizerFull sentimentData={sentimentData} overallSentiment={overallSentiment} sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Sentiment will appear as the conversation progresses.</p>}
+                  </TabsContent>
+                </Tabs>
+              </div>
+            );
+          })()}
+
+          {hostRole === "producer" && (
+            <div className="flex flex-col w-1/2 min-h-0 overflow-hidden" data-testid="role-rail-pm">
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "220px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <ClipboardList className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-semibold">Action Items</span>
+                  {actionItems.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{actionItems.length}</Badge>}
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-1">
+                    {actionItems.length > 0 ? actionItems.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 min-w-0">
+                        <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums pt-px">{i + 1}.</span>
+                        <span className="text-[11px] leading-snug text-foreground/90 min-w-0">{item.text}</span>
                       </div>
-                    )}
+                    )) : <p className="text-xs text-muted-foreground/50 py-3 text-center">Commitments and tasks appear here.</p>}
                   </div>
                 </ScrollArea>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <FolderOpen className="h-6 w-6 text-muted-foreground/10 mb-2" />
-                  <p className="text-xs text-muted-foreground">Similar Projects hidden.</p>
+              </div>
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "180px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <CalendarClock className="h-3.5 w-3.5 text-blue-500" />
+                  <span className="text-xs font-semibold">Timeline Signals</span>
+                  {timelineSignals.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{timelineSignals.length}</Badge>}
                 </div>
-              ),
-            },
-          ].filter(col => !isAEMode || col.id !== "followups")
-           .sort((a, b) => {
-            if (!isAEMode) return 0;
-            const aeOrder = ["similarprojects", "transcript", "sentiment", "actionitems", "topics"];
-            return aeOrder.indexOf(a.id) - aeOrder.indexOf(b.id);
-          })}
-        />
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-1.5">
+                    {timelineSignals.length > 0 ? timelineSignals.map((s, i) => (
+                      <div key={i} className="flex items-start gap-2 min-w-0">
+                        <span className={`text-[10px] font-semibold shrink-0 ${s.urgency === "high" ? "text-red-500" : s.urgency === "medium" ? "text-amber-500" : "text-muted-foreground"}`}>{s.date}</span>
+                        <span className="text-[10px] text-foreground/80 leading-snug min-w-0">{s.context}</span>
+                      </div>
+                    )) : <p className="text-xs text-muted-foreground/50 py-2 text-center">Dates and deadlines surface here.</p>}
+                  </div>
+                </ScrollArea>
+              </div>
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "160px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                  <span className="text-xs font-semibold">Risks & Dependencies</span>
+                  {riskFlags.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{riskFlags.length}</Badge>}
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-1">
+                    {riskFlags.length > 0 ? riskFlags.map((r, i) => (
+                      <div key={i} className="flex items-start gap-2 min-w-0">
+                        <span className={`text-[9px] font-semibold uppercase shrink-0 pt-px ${r.type === "blocker" ? "text-red-500" : r.type === "dependency" ? "text-amber-500" : "text-muted-foreground"}`}>{r.type ?? "risk"}</span>
+                        <span className="text-[11px] leading-snug text-foreground/90 min-w-0">{r.text}</span>
+                      </div>
+                    )) : <p className="text-xs text-muted-foreground/50 py-2 text-center">Blockers and dependencies appear here.</p>}
+                  </div>
+                </ScrollArea>
+              </div>
+              <Tabs defaultValue="followups" className="flex-1 min-h-0 flex flex-col">
+                <div className="px-2 pt-2 pb-0 shrink-0">
+                  <TabsList className="h-7 w-full grid grid-cols-4">
+                    <TabsTrigger value="followups" className="text-[10px] px-0 h-6">Questions</TabsTrigger>
+                    <TabsTrigger value="topics" className="text-[10px] px-0 h-6">Topics</TabsTrigger>
+                    <TabsTrigger value="projects" className="text-[10px] px-0 h-6">Projects</TabsTrigger>
+                    <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="followups" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Questions surface as the call progresses.</p>}
+                </TabsContent>
+                <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}
+                </TabsContent>
+                <TabsContent value="projects" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 space-y-2 data-[state=inactive]:hidden">
+                  {consolidatedProjects.length > 0 ? consolidatedProjects.map((match) => {
+                    const project = referenceProjectsList.find(p => p.id === match.projectId);
+                    const title = match.title || project?.title || `Project #${match.projectId}`;
+                    return (<div key={match.projectId} className="min-w-0"><span className="text-[11px] font-semibold truncate block">{title}</span><p className="text-[10px] text-emerald-600 dark:text-emerald-400 leading-snug">{match.relevance}</p></div>);
+                  }) : <p className="text-xs text-muted-foreground/50 py-4 text-center">Similar projects surface as topics are detected.</p>}
+                </TabsContent>
+                <TabsContent value="sentiment" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {sentimentData.length > 0 ? <SentimentEqualizerFull sentimentData={sentimentData} overallSentiment={overallSentiment} sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Sentiment will appear as the conversation progresses.</p>}
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {hostRole === "correspondent" && (
+            <div className="flex flex-col w-1/2 min-h-0 overflow-hidden" data-testid="role-rail-ba">
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "220px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <ListChecks className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-semibold">Requirements</span>
+                  {requirements.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{requirements.length}</Badge>}
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-1">
+                    {requirements.length > 0 ? requirements.map((r, i) => (
+                      <div key={i} className="flex items-start gap-2 min-w-0">
+                        <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums pt-px">{i + 1}.</span>
+                        <div className="min-w-0"><span className="text-[11px] leading-snug text-foreground/90">{r.text}</span>{r.source && <span className="text-[9px] text-muted-foreground ml-1">— {r.source}</span>}</div>
+                      </div>
+                    )) : <p className="text-xs text-muted-foreground/50 py-3 text-center">Client requirements appear here as stated.</p>}
+                  </div>
+                </ScrollArea>
+              </div>
+              <div className="shrink-0 border-b border-border flex flex-col" style={{ maxHeight: "180px" }}>
+                <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
+                  <Siren className="h-3.5 w-3.5 text-red-500" />
+                  <span className="text-xs font-semibold">Pain Points</span>
+                  {painPoints.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{painPoints.length}</Badge>}
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="px-3 py-1.5 space-y-1.5">
+                    {painPoints.length > 0 ? painPoints.map((p, i) => (
+                      <div key={i} className="min-w-0">
+                        <p className="text-[11px] leading-snug text-foreground/90">{p.text}</p>
+                        {p.impact && <p className="text-[10px] text-red-500/70 italic">{p.impact}</p>}
+                      </div>
+                    )) : <p className="text-xs text-muted-foreground/50 py-2 text-center">Business problems surface here.</p>}
+                  </div>
+                </ScrollArea>
+              </div>
+              {liveSpeakers.length > 0 && (
+                <div className="shrink-0 border-b border-border">
+                  <div className="px-3 py-2 flex items-center gap-2 bg-card/50">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-semibold">Stakeholders</span>
+                  </div>
+                  <div className="px-3 py-1.5 flex flex-wrap gap-2">
+                    {liveSpeakers.map((s, i) => {
+                      const color = getSpeakerColorByIndex(i);
+                      return (
+                        <div key={s.name} className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${color.text.replace("text-", "bg-")}`} />
+                          <span className={`text-[11px] font-medium ${color.text}`}>{s.name}</span>
+                          {s.title && <span className="text-[9px] text-muted-foreground">{s.title}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <Tabs defaultValue="followups" className="flex-1 min-h-0 flex flex-col">
+                <div className="px-2 pt-2 pb-0 shrink-0">
+                  <TabsList className="h-7 w-full grid grid-cols-4">
+                    <TabsTrigger value="followups" className="text-[10px] px-0 h-6">Questions</TabsTrigger>
+                    <TabsTrigger value="topics" className="text-[10px] px-0 h-6">Topics</TabsTrigger>
+                    <TabsTrigger value="actions" className="text-[10px] px-0 h-6">Actions</TabsTrigger>
+                    <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
+                  </TabsList>
+                </div>
+                <TabsContent value="followups" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Questions surface as the call progresses.</p>}
+                </TabsContent>
+                <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}
+                </TabsContent>
+                <TabsContent value="actions" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {actionItems.length > 0 ? <ActionItemsPanel items={actionItems} compact /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Action items will appear here.</p>}
+                </TabsContent>
+                <TabsContent value="sentiment" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {sentimentData.length > 0 ? <SentimentEqualizerFull sentimentData={sentimentData} overallSentiment={overallSentiment} sessionStart={activeSession.createdAt instanceof Date ? activeSession.createdAt.toISOString() : activeSession.createdAt} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Sentiment will appear as the conversation progresses.</p>}
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+        </div>
+
+        )}
       </div>
     </div>
   );

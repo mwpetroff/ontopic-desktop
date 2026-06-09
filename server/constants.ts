@@ -4,6 +4,40 @@ export interface FeatureFlags {
   similarProjects?: boolean;
   bantTracking?: boolean;
   methodologyTracking?: boolean;
+  // SA
+  competitorMentions?: boolean;
+  // PM
+  timelineSignals?: boolean;
+  riskFlags?: boolean;
+  // BA
+  requirements?: boolean;
+  painPoints?: boolean;
+}
+
+export function featuresForRole(role: string, salesMethodology?: string | null): FeatureFlags {
+  const base: FeatureFlags = {
+    actionItems: true,
+    followUpQuestions: true,
+    similarProjects: true,
+  };
+  switch (role) {
+    case "host":
+      return { ...base, competitorMentions: true };
+    case "engineer":
+      return { ...base };
+    case "producer":
+      return { ...base, timelineSignals: true, riskFlags: true };
+    case "correspondent":
+      return { ...base, requirements: true, painPoints: true };
+    case "account-executive":
+      return {
+        ...base,
+        bantTracking: true,
+        methodologyTracking: !!(salesMethodology),
+      };
+    default:
+      return base;
+  }
 }
 
 export const HOST_ROLE_LABELS: Record<string, string> = {

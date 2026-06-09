@@ -109,3 +109,40 @@ at a time. When a second instance launches, it forwards its argv to the first vi
 
 Do not remove or conditionalize this lock — without it, two Electron windows can race for
 port 3000 and leave orphaned server processes.
+
+---
+
+## Role-driven feature flags — never use user-toggled features
+
+AI features are controlled server-side by `featuresForRole()` in `server/constants.ts`,
+not by user-facing toggles. The function maps each `hostRole` string to a `FeatureFlags`
+object. `server/routes.ts` calls it on every analysis request and merges it over any
+caller-supplied flags so the server always wins.
+
+```ts
+// server/constants.ts
+export function featuresForRole(role: string, salesMethodology?: string | null): FeatureFlags
+```
+
+Role → features:
+- `host` (SA) → `actionItems`, `followUpQuestions`, `similarProjects`, **`competitorMentions`**
+- `engineer` (SE) → base only
+- `producer` (PM) → base + **`timelineSignals`**, **`riskFlags`**
+- `correspondent` (BA) → base + **`requirements`**, **`painPoints`**
+- `account-executive` (AE) → base + **`bantTracking`**, **`methodologyTracking`** (only when `salesMethodology` is set)
+
+Do **not** add `useState` toggles for features in the dashboard. The correct pattern is
+to let the role determine which panels render.
+
+---
+
+## Adding new session columns — always create a Drizzle migration
+
+When adding columns to the `sessions` table in `shared/schema.ts`, you must also:
+
+1. Create `drizzle/<idx>_<tag>.sql` with the `ALTER TABLE` statements.
+2. Add an entry to `drizzle/meta/_journal.json` with the next sequential `idx`.
+
+The migration runs automatically on app startup via `drizzle-kit migrate`. Skipping the
+migration file means the column exists in TypeScript types but not in the actual SQLite
+database, causing silent JSON parse failures at runtime.

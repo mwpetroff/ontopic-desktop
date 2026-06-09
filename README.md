@@ -43,7 +43,7 @@ Electron Main Process
 Electron Renderer (Vite + React)
   ├── Proxies /api → localhost:3000  retries on 502 (startup race)
   ├── useAudioCapture               replaces getUserMedia; receives IPC audio chunks
-  ├── Per-pane visibility toggles   hide/show any panel during a live session
+  ├── Role-specific layouts         50/50 video+tool split tailored per role (SA/SE/PM/BA/AE)
   ├── Low-audio warning             alerts after 10 s of silence during a live session
   └── All existing OnTopic UI       sessions, topics, partners, competencies, analytics
 ```
@@ -75,7 +75,7 @@ OPENAI_API_KEY=sk-...
 ## Testing
 
 ```bash
-npm test           # Run full test suite (vitest, 208 tests)
+npm test           # Run full test suite (vitest, ~283 tests)
 npm run test:watch # Watch mode
 ```
 
@@ -83,7 +83,8 @@ Tests use an isolated temporary SQLite database and never touch the production d
 
 | Test file | What it covers |
 |---|---|
-| `analysis-helpers.test.ts` | Speaker resolution, sentiment aggregation, BANT merge, methodology stages, `persistSessionUpdates` DB writes |
+| `analysis-helpers.test.ts` | Speaker resolution, sentiment aggregation, BANT merge, methodology stages, `persistSessionUpdates` DB writes, `dedupeByText` |
+| `constants.test.ts` | `featuresForRole` for all 5 roles, salesMethodology flag toggling |
 | `analytics.test.ts` | Competency match scoring, topic similarity detection |
 | `schema.test.ts` | Drizzle-Zod insert schemas, field stripping, JSON array columns |
 | `storage.test.ts` | Full CRUD lifecycle for all entities against real SQLite |
@@ -112,7 +113,7 @@ npm run build:linux  # Linux AppImage
 - [x] Phase 2.5: Frontend migrated from web app + SQLite backend
 - [x] API key stored in OS keychain via Electron safeStorage
 - [x] Single-instance lock + port conflict recovery
-- [x] Per-pane visibility toggles + low-audio warning
+- [x] Role-specific 50/50 layouts (SA/SE/PM/BA/AE) + low-audio warning
 - [ ] Phase 4: BlackHole + CoreAudio — macOS
 - [ ] Phase 5: PulseAudio monitor — Linux
 - [ ] Phase 6: Local Whisper (audio stays on-device)
@@ -136,7 +137,8 @@ npm run build:linux  # Linux AppImage
 | `shared/schema.ts` | Drizzle SQLite schema + Zod insert schemas |
 | `src/hooks/use-audio-capture.ts` | React hook replacing getUserMedia — receives IPC audio chunks |
 | `src/lib/queryClient.ts` | TanStack Query client — retries 502/503/504 automatically at startup |
-| `src/pages/dashboard.tsx` | Live session UI — per-pane toggles, low-audio warning, AE mode |
+| `src/pages/dashboard.tsx` | Live session UI — role-specific layouts (SA/SE/PM/BA/AE), HighlightedTranscript, low-audio warning |
+| `server/constants.ts` | `featuresForRole()` — maps each role to its AI feature flags; role label/focus/summary copy |
 
 ## Technical Plan
 
