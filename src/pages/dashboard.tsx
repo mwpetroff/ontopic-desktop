@@ -37,8 +37,11 @@ import { consolidateSimilarProjects } from "@shared/schema";
 import { useSettings } from "@/hooks/use-settings";
 
 async function pollAnalysisJob(sessionId: number, jobId: string): Promise<unknown> {
+  // 100 ms is safe for a loopback server (Electron or localhost dev).
+  // The job store is in-memory so reads are near-instant — the only real
+  // latency is OpenAI round-trip time, which we can't speed up.
   for (;;) {
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 100));
     const res = await apiRequest("GET", `/api/sessions/${sessionId}/jobs/${jobId}`);
     const job = await res.json() as { status: string; result?: unknown; error?: string };
     if (job.status === "done") return job.result;
@@ -705,7 +708,7 @@ export default function Dashboard() {
       if (nextIdx < demoChunksRef.current.length) {
         demoTimerRef.current = setTimeout(() => {
           processDemoChunk(session, nextIdx);
-        }, 800); // short pause between speakers
+        }, 300); // brief pause between speakers
       } else {
         setIsDemoRunning(false);
         if (demoAnimationRef.current) {
@@ -882,14 +885,17 @@ export default function Dashboard() {
       demoAudioPrefixRef.current = demoAudioPrefix;
       demoSpeakersRef.current = demoSpeakers;
 
-      const createdIds: number[] = [];
-      for (const project of demoRefProjects) {
-        try {
-          const res = await apiRequest("POST", "/api/reference-projects", project);
-          const created = await res.json();
-          createdIds.push(created.id);
-        } catch {}
-      }
+      // Create reference projects in parallel — no ordering dependency.
+      const createdIds = (await Promise.all(
+        demoRefProjects.map(async (project) => {
+          try {
+            const res = await apiRequest("POST", "/api/reference-projects", project);
+            const created = await res.json();
+            return created.id as number;
+          } catch { return null; }
+        })
+      )).filter((id): id is number => id !== null);
+
       demoProjectIdsRef.current = createdIds;
       if (createdIds.length > 0) {
         queryClient.invalidateQueries({ queryKey: ["/api/reference-projects"] });
@@ -923,7 +929,7 @@ export default function Dashboard() {
 
       setTimeout(() => {
         processDemoChunk(session, 0);
-      }, 1000);
+      }, 300);
     } catch (error) {
       toast({
         title: "Failed to start demo",
