@@ -563,6 +563,17 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/topics/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteTopic(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting topic:", error);
+      res.status(500).json({ error: "Failed to delete topic" });
+    }
+  });
+
   app.post("/api/sessions/:id/analyze", audioBodyParser, async (req, res) => {
     try {
       const sessionId = parseInt(req.params.id);

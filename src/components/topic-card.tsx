@@ -15,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Building2, Home, HelpCircle, Wrench, BookOpen, ChevronDown, Clock } from "lucide-react";
+import { Building2, Home, HelpCircle, Wrench, BookOpen, ChevronDown, Clock, Trash2 } from "lucide-react";
 import type { Topic, Partner } from "@shared/schema";
 
 const categoryColors: Record<string, string> = {
@@ -99,6 +99,18 @@ export function TopicCard({ topic, isNew, editable = false, sessionId, sessionSt
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/topics/${topic.id}`);
+    },
+    onSuccess: () => {
+      if (sessionId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/sessions/${sessionId}/topics`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/sessions", sessionId] });
+      }
+    },
+  });
+
   const handleCapabilityChange = (value: string) => {
     if (value === "in-house") {
       updateMutation.mutate({ capabilitySource: "in-house", partnerName: null });
@@ -148,6 +160,18 @@ export function TopicCard({ topic, isNew, editable = false, sessionId, sessionSt
             >
               {topic.category}
             </Badge>
+          )}
+          {editable && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              data-testid={`button-delete-topic-${topic.id}`}
+            >
+              <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+            </Button>
           )}
         </div>
       </div>

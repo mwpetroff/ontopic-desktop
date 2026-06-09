@@ -17,6 +17,7 @@ export interface IStorage {
   createTopic(data: InsertTopic): Promise<Topic>;
   getTopicsBySession(sessionId: number): Promise<Topic[]>;
   updateTopic(id: number, data: Partial<Topic>): Promise<Topic | undefined>;
+  deleteTopic(id: number): Promise<void>;
   findTopicByTerm(sessionId: number, term: string): Promise<Topic | undefined>;
 
   createVoiceProfile(data: InsertVoiceProfile): Promise<VoiceProfile>;
@@ -106,6 +107,10 @@ export class DatabaseStorage implements IStorage {
   async updateTopic(id: number, data: Partial<Topic>): Promise<Topic | undefined> {
     const [topic] = await db.update(topics).set(data).where(eq(topics.id, id)).returning();
     return topic;
+  }
+
+  async deleteTopic(id: number): Promise<void> {
+    await db.delete(topics).where(eq(topics.id, id));
   }
 
   async findTopicByTerm(sessionId: number, term: string): Promise<Topic | undefined> {
