@@ -21,6 +21,16 @@
 
   const isDev = process.env.NODE_ENV === "development";
 
+  // Returns the OS-appropriate app-data directory root (no "OnTopic" suffix).
+  function getAppDataDir() {
+    return (
+      process.env.APPDATA ||
+      (process.platform === "darwin"
+        ? path.join(process.env.HOME, "Library", "Application Support")
+        : path.join(process.env.HOME, ".local", "share"))
+    );
+  }
+
   // ─── Settings Store ───────────────────────────────────────────────────────────
   // electron-store is ESM-only in v9+; use dynamic import.
   let store = null;
@@ -61,11 +71,7 @@
 
   function loadEnvFile() {
     const { config: dotenvConfig } = require("dotenv");
-    const appData =
-      process.env.APPDATA ||
-      (process.platform === "darwin"
-        ? path.join(process.env.HOME, "Library", "Application Support")
-        : path.join(process.env.HOME, ".local", "share"));
+    const appData = getAppDataDir();
 
     // Only check project root in dev mode. In production the .env file
     // is not present and all config comes from safeStorage.
@@ -117,10 +123,9 @@
       ? ["/c", tsxBin + ".cmd", serverScript]
       : [serverScript];
 
-    const logPath = path.join(
-      process.env.APPDATA || path.join(process.env.HOME, ".local", "share"),
-      "OnTopic", "server.log"
-    );
+    const logDir = path.join(getAppDataDir(), "OnTopic");
+    require("fs").mkdirSync(logDir, { recursive: true });
+    const logPath = path.join(logDir, "server.log");
 
     serverProcess = spawn(spawnCmd, spawnArgs, {
       env: {
@@ -388,11 +393,19 @@
           } catch {}
         }
       } else {
-        // lsof -ti returns just the PIDs for processes listening on the port.
-        const pids = execSync(`lsof -ti tcp:${port}`, { encoding: "utf8", timeout: 5000 })
-          .split("\n")
-          .map(s => s.trim())
-          .filter(Boolean);
+        // Try lsof first (available on macOS and most Linux distros).
+        // Fall back to ss (iproute2) for minimal Linux systems without lsof.
+        let pids = [];
+        try {
+          pids = execSync(`lsof -ti tcp:${port}`, { encoding: "utf8", timeout: 5000 })
+            .split("\n").map(s => s.trim()).filter(Boolean);
+        } catch {
+          try {
+            const ssOut = execSync(`ss -tlnp sport = :${port}`, { encoding: "utf8", timeout: 5000 });
+            const matches = ssOut.match(/pid=(\d+)/g) || [];
+            pids = [...new Set(matches.map(m => m.replace("pid=", "")))];
+          } catch { /* neither tool available — give up silently */ }
+        }
         for (const pid of pids) {
           try {
             execSync(`kill -9 ${pid}`, { timeout: 5000 });

@@ -262,7 +262,7 @@ export async function analyzeText(
           },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 2048,
+        max_completion_tokens: 4096,
       });
 
       const analysisText = analysisResponse.choices[0]?.message?.content || "{}";

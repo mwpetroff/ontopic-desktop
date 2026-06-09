@@ -16,6 +16,68 @@ import { getTopicFrequency, getTopicTrends, getGapAnalysis, getNeedsVsOfferings,
 
 const audioBodyParser = express.json({ limit: "50mb" });
 
+// ─── Session analysis queue (A-06) ───────────────────────────────────────────
+// Serializes concurrent /analyze calls per session to prevent read-then-write races.
+const sessionQueues = new Map<number, Promise<unknown>>();
+function enqueueForSession<T>(sessionId: number, fn: () => Promise<T>): Promise<T> {
+  const prev = sessionQueues.get(sessionId) ?? Promise.resolve();
+  const next = prev.then(fn, fn); // chain even on prior failure so queue stays unblocked
+  sessionQueues.set(sessionId, next);
+  next.finally(() => {
+    if (sessionQueues.get(sessionId) === next) sessionQueues.delete(sessionId);
+  });
+  return next as Promise<T>;
+}
+
+// ─── Static prompt context cache (A-09) ──────────────────────────────────────
+// Partners, competencies, and reference projects are global and change rarely.
+// Cache them to avoid 3 DB reads + string rebuilds on every analyze call.
+interface StaticPromptContext {
+  partnerList: string;
+  competencyContext: string;
+  allReferenceProjects: ReferenceProject[];
+  cachedAt: number;
+}
+let _staticContextCache: StaticPromptContext | null = null;
+const STATIC_CONTEXT_TTL_MS = 5 * 60_000; // 5-min safety-net TTL; explicit invalidation is primary
+
+function invalidateStaticContext(): void {
+  _staticContextCache = null;
+}
+
+async function getStaticPromptContext(): Promise<StaticPromptContext> {
+  const now = Date.now();
+  if (_staticContextCache && now - _staticContextCache.cachedAt < STATIC_CONTEXT_TTL_MS) {
+    return _staticContextCache;
+  }
+  const [allPartners, allCompetencies, allReferenceProjects] = await Promise.all([
+    storage.getPartners(),
+    storage.getCompetencies(),
+    storage.getReferenceProjects(),
+  ]);
+  const partnerList = allPartners
+    .map((p) => `${p.name} (specialties: ${(p.specialties || []).join(", ")})`)
+    .join("; ");
+  let competencyContext = "";
+  if (allCompetencies.length > 0) {
+    const inHouse = allCompetencies.filter(c => c.source === "in-house");
+    const partnerComps = allCompetencies.filter(c => c.source === "partner");
+    const lines: string[] = [];
+    if (inHouse.length > 0) lines.push("In-house capabilities: " + inHouse.map(c => `${c.name} (${c.type}${c.description ? ": " + c.description : ""})`).join("; "));
+    if (partnerComps.length > 0) lines.push("Partner capabilities: " + partnerComps.map(c => `${c.name} (${c.type}${c.partnerName ? " via " + c.partnerName : ""}${c.description ? ": " + c.description : ""})`).join("; "));
+    competencyContext = lines.join("\n");
+  }
+  _staticContextCache = { partnerList, competencyContext, allReferenceProjects, cachedAt: now };
+  return _staticContextCache;
+}
+
+// ─── Safe JSON column accessor (A-10) ────────────────────────────────────────
+// Drizzle parses JSON columns on read; if a column is null/corrupt this ensures
+// we always get a typed array rather than crashing or mis-casting.
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 interface VoiceMatchHint {
   name: string;
   title?: string;
@@ -29,21 +91,16 @@ async function processAnalysis(
   features: FeatureFlags = {},
   voiceMatch?: VoiceMatchHint
 ) {
-  const [existingTopics, allPartners, appSettings, allCompetencies, allReferenceProjects] = await Promise.all([
+  const [existingTopics, appSettings, staticCtx] = await Promise.all([
     storage.getTopicsBySession(sessionId),
-    storage.getPartners(),
     storage.getSettings(),
-    storage.getCompetencies(),
-    storage.getReferenceProjects(),
+    getStaticPromptContext(),
   ]);
+  const { partnerList, competencyContext, allReferenceProjects } = staticCtx;
 
   const existingTerms = existingTopics.map((t) => t.term.toLowerCase());
 
-  const partnerList = allPartners
-    .map((p) => `${p.name} (specialties: ${(p.specialties || []).join(", ")})`)
-    .join("; ");
-
-  const existingSentiment = (session.sentimentData || []) as SentimentEntry[];
+  const existingSentiment = safeArray<SentimentEntry>(session.sentimentData);
   const knownSpeakers = [
     ...new Set(existingSentiment.map((s) => s.speaker).filter(Boolean) as string[]),
   ];
@@ -53,19 +110,6 @@ async function processAnalysis(
   const industry = session.industry || null;
 
   const analysisModel = appSettings.analysisModel || "gpt-4o-mini";
-  let competencyContext = "";
-  if (allCompetencies.length > 0) {
-    const inHouse = allCompetencies.filter(c => c.source === "in-house");
-    const partner = allCompetencies.filter(c => c.source === "partner");
-    const lines: string[] = [];
-    if (inHouse.length > 0) {
-      lines.push("In-house capabilities: " + inHouse.map(c => `${c.name} (${c.type}${c.description ? ": " + c.description : ""})`).join("; "));
-    }
-    if (partner.length > 0) {
-      lines.push("Partner capabilities: " + partner.map(c => `${c.name} (${c.type}${c.partnerName ? " via " + c.partnerName : ""}${c.description ? ": " + c.description : ""})`).join("; "));
-    }
-    competencyContext = lines.join("\n");
-  }
 
   let referenceProjectContext = "";
   if (features.similarProjects && allReferenceProjects.length > 0) {
@@ -116,7 +160,7 @@ async function processAnalysis(
 
   const isHost = !!(voiceMatch && voiceMatch.confidence >= 0.55);
   const updatedSpeakers = updateSpeakersList(
-    (session.speakers || []) as SpeakerEntry[],
+    safeArray<SpeakerEntry>(session.speakers),
     speaker,
     speakerTitle,
     isHost
@@ -130,8 +174,8 @@ async function processAnalysis(
   const sentimentScore = newEntry.score;
   const sentimentLabel = newEntry.label;
 
-  const existingActionItems = (session.actionItems || []) as ActionItem[];
-  const existingFollowUps = (session.followUpQuestions || []) as FollowUpQuestion[];
+  const existingActionItems = safeArray<ActionItem>(session.actionItems);
+  const existingFollowUps = safeArray<FollowUpQuestion>(session.followUpQuestions);
   const newActionItems = analysis.actionItems || [];
   const newFollowUpQuestions = analysis.followUpQuestions || [];
   let updatedActionItems = [...existingActionItems, ...newActionItems];
@@ -147,7 +191,7 @@ async function processAnalysis(
     ? [...existingFollowUps, ...newFollowUpQuestions].slice(-5)
     : existingFollowUps;
 
-  const existingMatches = (session.similarProjectMatches || []) as Array<{ projectId: number; relevance: string; title?: string; industry?: string; clientName?: string; projectDate?: string }>;
+  const existingMatches = safeArray<{ projectId: number; relevance: string; title?: string; industry?: string; clientName?: string; projectDate?: string }>(session.similarProjectMatches);
   const updatedSimilarMatches = accumulateSimilarProjects(
     existingMatches,
     analysis.similarProjects || [],
@@ -177,19 +221,19 @@ async function processAnalysis(
   type PainPoint = { text: string; impact?: string };
 
   const updatedCompetitorMentions = features.competitorMentions
-    ? dedupeByText([...(session.competitorMentions || []) as CompetitorMention[], ...(analysis.competitorMentions || [])], (m: CompetitorMention) => m.name.toLowerCase())
+    ? dedupeByText([...safeArray<CompetitorMention>(session.competitorMentions), ...(analysis.competitorMentions || [])], (m: CompetitorMention) => m.name.toLowerCase())
     : undefined;
   const updatedTimelineSignals = features.timelineSignals
-    ? [...(session.timelineSignals || []) as TimelineSignal[], ...(analysis.timelineSignals || [])]
+    ? [...safeArray<TimelineSignal>(session.timelineSignals), ...(analysis.timelineSignals || [])]
     : undefined;
   const updatedRiskFlags = features.riskFlags
-    ? dedupeByText([...(session.riskFlags || []) as RiskFlag[], ...(analysis.riskFlags || [])], (r: RiskFlag) => r.text.toLowerCase().slice(0, 40))
+    ? dedupeByText([...safeArray<RiskFlag>(session.riskFlags), ...(analysis.riskFlags || [])], (r: RiskFlag) => r.text.toLowerCase().slice(0, 40))
     : undefined;
   const updatedRequirements = features.requirements
-    ? dedupeByText([...(session.requirements || []) as Requirement[], ...(analysis.requirements || [])], (r: Requirement) => r.text.toLowerCase().slice(0, 40))
+    ? dedupeByText([...safeArray<Requirement>(session.requirements), ...(analysis.requirements || [])], (r: Requirement) => r.text.toLowerCase().slice(0, 40))
     : undefined;
   const updatedPainPoints = features.painPoints
-    ? dedupeByText([...(session.painPoints || []) as PainPoint[], ...(analysis.painPoints || [])], (p: PainPoint) => p.text.toLowerCase().slice(0, 40))
+    ? dedupeByText([...safeArray<PainPoint>(session.painPoints), ...(analysis.painPoints || [])], (p: PainPoint) => p.text.toLowerCase().slice(0, 40))
     : undefined;
 
   const allTopics = await storage.getTopicsBySession(sessionId);
@@ -537,7 +581,9 @@ export async function registerRoutes(
           };
         }
       }
-      const result = await processAnalysis(sessionId, transcriptText, session, features, voiceMatch);
+      const result = await enqueueForSession(sessionId, () =>
+        processAnalysis(sessionId, transcriptText, session, features, voiceMatch)
+      );
       res.json(result);
 
     } catch (error) {
@@ -583,7 +629,9 @@ export async function registerRoutes(
         ? { name: String(explicitSpeaker), confidence: 1.0 }
         : undefined;
 
-      const result = await processAnalysis(sessionId, text, session, features, demoVoiceMatch);
+      const result = await enqueueForSession(sessionId, () =>
+        processAnalysis(sessionId, text, session, features, demoVoiceMatch)
+      );
       res.json(result);
 
     } catch (error) {
@@ -684,6 +732,13 @@ export async function registerRoutes(
       console.error("Error fetching partners:", error);
       res.status(500).json({ error: "Failed to fetch partners" });
     }
+  });
+
+  // Invalidate the static prompt context cache on any write to partners,
+  // competencies, or reference-projects so the next analyze call re-fetches.
+  app.use(/^\/api\/(partners|competencies|reference-projects)/, (req, _res, next) => {
+    if (req.method !== "GET") invalidateStaticContext();
+    next();
   });
 
   app.post("/api/partners", async (req, res) => {

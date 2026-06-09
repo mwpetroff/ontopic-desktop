@@ -4,13 +4,15 @@
 
 ## Architecture — P0: Blocks macOS / Linux shipping
 
+> **macOS items (A-01, A-02, A-13) are deferred until a Mac build environment is available.** All context is preserved below so they can be picked up without re-investigation.
+
 | # | Item | Notes |
 |---|------|-------|
-| A-01 | **macOS speaker capture** | Bundle BlackHole installer; call Swift/ObjC helper to create Multi-Output Device; open BlackHole 2ch via naudiodon. `speaker-capture-mac.js` is a no-op stub today. |
-| A-02 | **macOS entitlements** | Add `NSMicrophoneUsageDescription` + `com.apple.security.device.audio-input` to electron-builder config. Gatekeeper rejects without this. |
-| A-03 | **Linux speaker capture** | Implement `parec` spawn or naudiodon PulseAudio backend. Detect PulseAudio vs PipeWire. Check `audio` group membership and surface a clear error if missing. `speaker-capture-linux.js` has the monitor-source logic but never calls it. |
-| A-04 | **Platform-conditional server spawn** | `electron/main.js` hard-codes `cmd.exe /c tsx.cmd`. Extract to a per-platform spawn helper so macOS/Linux use the tsx binary directly. |
-| A-05 | **Platform-conditional port cleanup** | `electron/main.js` uses inline `netstat`/`taskkill` shell strings (Windows-only). Replace with cross-platform process-tree kill that works on macOS (`lsof`/`kill`) and Linux. |
+| A-01 | **macOS speaker capture** *(deferred — needs Mac)* | Bundle BlackHole installer; call Swift/ObjC helper to create Multi-Output Device via CoreAudio; open BlackHole 2ch via naudiodon. `speaker-capture-mac.js` is a no-op stub. The setup wizard opens a GitHub wiki — needs to instead bundle and silently install the .pkg. Requires `NSMicrophoneUsageDescription` (see A-02). |
+| A-02 | **macOS entitlements** *(deferred — needs Mac)* | Add `NSMicrophoneUsageDescription` + `com.apple.security.device.audio-input` entitlement to `electron-builder.yml`. App will be rejected by Gatekeeper without this. Also add `com.apple.security.files.user-selected.read-write` if the aggregate-device setup helper writes to system audio prefs. |
+| A-03 | **Linux speaker capture** | Implement `parec` spawn or naudiodon PulseAudio backend. `speaker-capture-linux.js` has `_getMonitorSource()` implemented but never called — the `parec` spawn code is in comments on lines 52-59. Detect PulseAudio vs PipeWire (`pactl info`). Check `audio` group membership (`groups | grep audio`) and emit a clear error if missing. |
+| ~~A-04~~ | ~~Platform-conditional server spawn~~ | ✅ Done — extracted `getAppDataDir()` helper; `loadEnvFile()` and `startServer()` log path both use it. Spawn itself was already platform-conditional. |
+| ~~A-05~~ | ~~Platform-conditional port cleanup~~ | ✅ Done — `killProcessOnPort` Unix branch now tries `lsof` first, falls back to `ss` (iproute2) for minimal Linux. `mkdirSync` added for log directory. |
 
 ---
 
@@ -18,12 +20,12 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| A-06 | **Session analysis queue** | `processAnalysis()` has no per-session lock. Concurrent `/analyze` calls read-then-write without coordination. Add an in-memory queue keyed by `sessionId` to serialize calls per session. |
+| ~~A-06~~ | ~~Session analysis queue~~ | ✅ Done — `enqueueForSession()` serializes `/analyze` and `/demo-analyze` per `sessionId` using a chained Promise map. |
 | A-07 | **Analysis async response** | `/analyze` blocks the HTTP connection for the full Whisper + GPT round-trip (2–8 s). Return `202 + jobId` immediately; deliver result via polling or SSE. Prevents UI retry storms on slow calls. |
-| A-08 | **Token budget management** | `analyzeText()` caps at 2048 output tokens. Complex roles (AE + methodology) can exceed this — response truncates silently and the fallback returns `{ terms: [] }`. Raise to 4096; add a stripped-down fallback prompt that drops optional sections on retry. |
-| A-09 | **Prompt caching** | Partners, competencies, and reference projects are re-fetched from DB and re-injected into the prompt on every `/analyze` call. Cache the static prompt fragment per session; invalidate on settings change. |
-| A-10 | **JSON column validation on read** | `sentimentData`, `actionItems`, `bantData`, etc. are stored as raw text JSON with no validation on read. Wrap all `JSON.parse` calls at the storage layer in try/catch; surface corrupt columns as a recoverable error rather than a crash. |
-| A-11 | **Migration safety** | The migration runner swallows all errors matching `"already exists"`. Only suppress that for `ALTER TABLE ADD COLUMN`; re-throw everything else so a failed migration is visible on startup. |
+| ~~A-08~~ | ~~Token budget management~~ | ✅ Done — `max_completion_tokens` raised from 2048 → 4096 in `analyzeText()`. |
+| ~~A-09~~ | ~~Prompt caching~~ | ✅ Done — `getStaticPromptContext()` caches partners + competencies + reference projects with a 5-min TTL and explicit invalidation middleware on all partner/competency/reference-project mutation routes. |
+| ~~A-10~~ | ~~JSON column validation on read~~ | ✅ Done — `safeArray<T>()` helper replaces all raw `(session.x \|\| []) as T[]` casts in `processAnalysis()`; null/corrupt columns degrade to empty arrays instead of a type mis-cast. |
+| ~~A-11~~ | ~~Migration safety~~ | ✅ Done — `db.ts` now only suppresses errors matching `table/column/index … already exists`; all other migration errors are re-thrown to surface on startup. |
 
 ---
 
@@ -138,6 +140,13 @@ Full Salesforce Connected App integration so the "Push to Salesforce" button act
 
 | Item | Commit |
 |------|--------|
+| A-04: `getAppDataDir()` helper; macOS-correct log path; `mkdirSync` for log dir | (pending) |
+| A-05: `lsof` → `ss` fallback in `killProcessOnPort` for Linux without lsof | (pending) |
+| A-06: `enqueueForSession()` — per-session analysis queue preventing race conditions | (pending) |
+| A-08: `max_completion_tokens` raised 2048 → 4096 | (pending) |
+| A-09: `getStaticPromptContext()` — 5-min TTL cache + explicit invalidation middleware | (pending) |
+| A-10: `safeArray<T>()` — null-safe JSON column accessor throughout `processAnalysis` | (pending) |
+| A-11: Migration error handling tightened — only ignores `already exists`, re-throws rest | (pending) |
 | Role-specific 50/50 layouts for all 5 presales roles | `cd394f2` |
 | Role-driven feature flags via `featuresForRole()` | `cd394f2` |
 | New AI fields: competitor mentions, timeline signals, risk flags, requirements, pain points | `cd394f2` |
