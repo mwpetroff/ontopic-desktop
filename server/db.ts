@@ -41,6 +41,25 @@ sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });
 
+// Explicitly add any columns that may be missing when the DB was created before
+// migration tracking was set up. This runs before drizzle migrate() so the columns
+// are always present regardless of whether migrate() succeeds or fails.
+function ensureColumn(table: string, column: string, typeDef: string) {
+  const exists = (sqlite.prepare(`PRAGMA table_info(\`${table}\`)`).all() as { name: string }[])
+    .some(col => col.name === column);
+  if (!exists) {
+    sqlite.exec(`ALTER TABLE \`${table}\` ADD \`${column}\` ${typeDef}`);
+    console.log(`[db] Added missing column: ${table}.${column}`);
+  }
+}
+
+// 0001_role_layouts — columns added for SA/BA/PM/AE role-specific features
+ensureColumn("sessions", "competitor_mentions", "text");
+ensureColumn("sessions", "timeline_signals", "text");
+ensureColumn("sessions", "risk_flags", "text");
+ensureColumn("sessions", "requirements", "text");
+ensureColumn("sessions", "pain_points", "text");
+
 // Apply any pending migrations (creates tables on first launch, no-op if already up-to-date).
 const migrationsFolder = path.resolve(__dirname, "../drizzle");
 try {
