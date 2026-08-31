@@ -60,6 +60,9 @@ ensureColumn("sessions", "risk_flags", "text");
 ensureColumn("sessions", "requirements", "text");
 ensureColumn("sessions", "pain_points", "text");
 
+// 0002_sipoc — BA persona SIPOC tool
+ensureColumn("sessions", "sipoc_data", "text");
+
 // Apply any pending migrations (creates tables on first launch, no-op if already up-to-date).
 const migrationsFolder = path.resolve(__dirname, "../drizzle");
 try {

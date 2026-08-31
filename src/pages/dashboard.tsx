@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
+import { SipocBoard } from "@/components/sipoc-board";
 import {
   Activity, Square, Mic, MicOff, Loader2, AlertCircle, BookOpen,
   Play, ClipboardList, HelpCircle, Building2,
@@ -255,14 +256,6 @@ const BANT_KEYS = [
   { key: "authority" as keyof BANTData, label: "Authority", icon: UserCheck, color: "text-blue-500" },
   { key: "needs" as keyof BANTData, label: "Needs", icon: Target, color: "text-amber-500" },
   { key: "timeline" as keyof BANTData, label: "Timeline", icon: Clock, color: "text-purple-500" },
-];
-
-const SIPOC_COLUMNS = [
-  { key: "suppliers" as keyof Omit<SIPOCData, "lastUpdated">, label: "Suppliers" },
-  { key: "inputs" as keyof Omit<SIPOCData, "lastUpdated">, label: "Inputs" },
-  { key: "process" as keyof Omit<SIPOCData, "lastUpdated">, label: "Process" },
-  { key: "outputs" as keyof Omit<SIPOCData, "lastUpdated">, label: "Outputs" },
-  { key: "customers" as keyof Omit<SIPOCData, "lastUpdated">, label: "Customers" },
 ];
 
 type SentimentPoint = SentimentEntry;
@@ -1966,27 +1959,7 @@ export default function Dashboard() {
                   {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Questions surface as the call progresses.</p>}
                 </TabsContent>
                 <TabsContent value="sipoc" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
-                  {sipocData && SIPOC_COLUMNS.some(c => sipocData[c.key].length > 0) ? (
-                    <div className="space-y-2.5">
-                      {SIPOC_COLUMNS.map(col => (
-                        <div key={col.key} className="min-w-0">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{col.label}</span>
-                            {sipocData[col.key].length > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1">{sipocData[col.key].length}</Badge>}
-                          </div>
-                          {sipocData[col.key].length > 0 ? (
-                            <ul className="space-y-0.5">
-                              {sipocData[col.key].map((item, i) => (
-                                <li key={i} className="text-[11px] leading-snug text-foreground/90">{item.text}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-[10px] text-muted-foreground/40">Not yet identified.</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p className="text-xs text-muted-foreground/50 py-4 text-center">Suppliers, inputs, process, outputs, and customers surface here as the process is described.</p>}
+                  <SipocBoard data={sipocData} compact />
                 </TabsContent>
                 <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
                   {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}

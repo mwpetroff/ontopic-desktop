@@ -14,11 +14,13 @@ import { SentimentBadge } from "@/components/sentiment-indicator";
 import { SentimentEqualizerFull } from "@/components/sentiment-equalizer";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
-import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload, FileJson, Pencil, Check, X, Workflow } from "lucide-react";
+import { SipocBoard, SIPOC_COLUMNS } from "@/components/sipoc-board";
+import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload, FileJson, Pencil, Check, X, Workflow, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { exportSessionPdf, exportSessionJson } from "@/lib/export-pdf";
+import { exportBaTabsExcel } from "@/lib/export-excel";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/use-sessions";
@@ -27,14 +29,6 @@ import { consolidateSimilarProjects } from "@shared/schema";
 import { formatDate, formatDuration } from "@/lib/date";
 
 type SessionWithTopics = Session & { topics: Topic[] };
-
-const SIPOC_COLUMNS = [
-  { key: "suppliers" as keyof Omit<SIPOCData, "lastUpdated">, label: "Suppliers" },
-  { key: "inputs" as keyof Omit<SIPOCData, "lastUpdated">, label: "Inputs" },
-  { key: "process" as keyof Omit<SIPOCData, "lastUpdated">, label: "Process" },
-  { key: "outputs" as keyof Omit<SIPOCData, "lastUpdated">, label: "Outputs" },
-  { key: "customers" as keyof Omit<SIPOCData, "lastUpdated">, label: "Customers" },
-];
 
 function TopicGroups({ topics, sessionId, sessionStartTime }: { topics: Topic[]; sessionId: number; sessionStartTime?: string | Date }) {
   const tools = topics.filter(t => t.type === "tool");
@@ -203,6 +197,9 @@ export default function SessionDetail() {
   const hasSentiment = sentimentData.length > 0;
   const sessionSipoc = (session.sipocData || null) as SIPOCData | null;
   const hasSipoc = !!sessionSipoc && SIPOC_COLUMNS.some(c => sessionSipoc[c.key].length > 0);
+  const hasRequirements = ((session.requirements as { text: string }[] | null) || []).length > 0;
+  const hasPainPoints = ((session.painPoints as { text: string }[] | null) || []).length > 0;
+  const hasBaTabs = hasRequirements || hasPainPoints || hasSipoc;
 
   return (
     <div className="flex flex-col h-full">
@@ -245,6 +242,21 @@ export default function SessionDetail() {
                     <FileJson className="h-3.5 w-3.5 mr-2" />
                     Export JSON
                   </DropdownMenuItem>
+                  {hasBaTabs && (
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        try {
+                          await exportBaTabsExcel(session);
+                        } catch (err) {
+                          toast({ title: "Excel export failed", variant: "destructive" });
+                        }
+                      }}
+                      data-testid="button-export-excel"
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
+                      Export BA Tabs (Excel)
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -677,31 +689,8 @@ export default function SessionDetail() {
           {hasSipoc && sessionSipoc && (
             <TabsContent value="sipoc" className="flex-1 overflow-hidden mt-0">
               <ScrollArea className="h-full">
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  {SIPOC_COLUMNS.map(col => (
-                    <Card key={col.key} className="p-3 min-w-0" data-testid={`card-sipoc-${col.key}`}>
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{col.label}</span>
-                      {sessionSipoc[col.key].length > 0 ? (
-                        <ul className="mt-2 space-y-1.5">
-                          {sessionSipoc[col.key].map((item, i) => (
-                            <li key={i} className="flex items-start justify-between gap-1.5 group">
-                              <span className="text-xs leading-snug text-foreground/90">{item.text}</span>
-                              <button
-                                onClick={() => removeSipocItem(col.key, i)}
-                                className="shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground/60 hover:!text-destructive transition-colors"
-                                data-testid={`button-remove-sipoc-${col.key}-${i}`}
-                                aria-label={`Remove ${col.label.slice(0, -1)}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-xs text-muted-foreground/50 mt-2">Not identified in this session.</p>
-                      )}
-                    </Card>
-                  ))}
+                <div className="p-4">
+                  <SipocBoard data={sessionSipoc} onRemoveItem={removeSipocItem} />
                 </div>
               </ScrollArea>
             </TabsContent>

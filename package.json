@@ -97,6 +97,7 @@
     "drizzle-zod": "^0.8.3",
     "electron-store": "^11.0.2",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "framer-motion": "^12.36.0",

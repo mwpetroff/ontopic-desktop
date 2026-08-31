@@ -39,11 +39,18 @@ setups), Electron runs as plain Node.js and never opens a window. Symptoms:
 - `require("electron")` returns the npm package path string instead of the built-in APIs
 - `ipcMain` is `undefined` at runtime → `TypeError: Cannot read properties of undefined (reading 'handle')`
 
-Fix: unset the variable before launching.
+Fix: fully **unset/remove** the variable before launching — Electron checks whether the
+variable is *present* in the environment, not whether it's truthy, so setting it to an
+empty string is not enough and still triggers the run-as-node bug (confirmed by hitting
+this exact failure while testing on 2026-08-31).
+
 ```powershell
-$env:ELECTRON_RUN_AS_NODE = ""
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 npm run dev
 ```
+
+In bash (e.g. this project's Bash tool), the equivalent is `env -u ELECTRON_RUN_AS_NODE npm run dev`
+— `ELECTRON_RUN_AS_NODE= npm run dev` (setting it to empty) does **not** work.
 
 ---
 
@@ -136,13 +143,24 @@ to let the role determine which panels render.
 
 ---
 
-## Adding new session columns — always create a Drizzle migration
+## Adding new session columns — always create a Drizzle migration AND an `ensureColumn()` call
 
 When adding columns to the `sessions` table in `shared/schema.ts`, you must also:
 
 1. Create `drizzle/<idx>_<tag>.sql` with the `ALTER TABLE` statements.
 2. Add an entry to `drizzle/meta/_journal.json` with the next sequential `idx`.
+3. Add an `ensureColumn("sessions", "<column>", "<type>")` call in `server/db.ts`, next to
+   the existing ones.
 
-The migration runs automatically on app startup via `drizzle-kit migrate`. Skipping the
-migration file means the column exists in TypeScript types but not in the actual SQLite
-database, causing silent JSON parse failures at runtime.
+Step 3 is easy to skip and **the tests will not catch it** — `tests/setup.ts` runs `migrate()`
+against a brand-new database where every migration applies cleanly in order, so it always
+passes. The real app database is a different story: it predates migration tracking (it was
+originally seeded via `drizzle-kit push`, so there is no `__drizzle_migrations` table). Every
+launch, `migrate()` replays *all* migration files from `0000` — hits an "already exists"
+collision on an early one, throws, and `server/db.ts`'s catch-all logs a warning and gives up
+for that call. Your new migration file, even though it's syntactically fine and would apply
+standalone, **never runs** on that database because `migrate()` aborted before reaching it.
+Symptom: `SqliteError: table sessions has no column named <your_column>` the first time a
+session write touches it, discovered only by actually running the app against real user data,
+not by `npm test`. `ensureColumn()` is the defense-in-depth that makes the column show up
+regardless of whether `migrate()` gets that far.
