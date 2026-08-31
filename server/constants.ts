@@ -12,6 +12,7 @@ export interface FeatureFlags {
   // BA
   requirements?: boolean;
   painPoints?: boolean;
+  sipoc?: boolean;
 }
 
 export function featuresForRole(role: string, salesMethodology?: string | null): FeatureFlags {
@@ -28,12 +29,16 @@ export function featuresForRole(role: string, salesMethodology?: string | null):
     case "producer":
       return { ...base, timelineSignals: true, riskFlags: true };
     case "correspondent":
-      return { ...base, requirements: true, painPoints: true };
+      return { ...base, requirements: true, painPoints: true, sipoc: true };
     case "account-executive":
       return {
         ...base,
         bantTracking: true,
-        methodologyTracking: !!(salesMethodology),
+        // Validate against known methodology IDs, not mere truthiness — a
+        // stale value from a removed methodology (e.g. a deleted option)
+        // should behave the same as "not selected" rather than silently
+        // enabling a tracker with zero stages.
+        methodologyTracking: !!(salesMethodology && METHODOLOGY_STAGES[salesMethodology]),
       };
     default:
       return base;
@@ -79,16 +84,6 @@ export interface MethodologyStageDefinition {
 }
 
 export const METHODOLOGY_STAGES: Record<string, MethodologyStageDefinition[]> = {
-  sandler: [
-    { id: "rapport", name: "Rapport & Upfront Contract", description: "Established rapport and set mutual expectations for the call structure and outcome" },
-    { id: "pain-surface", name: "Surface Pain", description: "Prospect mentioned specific problems, frustrations, or challenges with the current situation" },
-    { id: "pain-business", name: "Business Impact", description: "Pain was tied to measurable business consequences such as lost revenue, costs, or missed targets" },
-    { id: "pain-personal", name: "Personal Impact", description: "The pain was connected to personal stakes for the decision maker (career, reputation, or pressure from leadership)" },
-    { id: "budget", name: "Budget Discussion", description: "Budget range, allocated spend, or financial authority was discussed or confirmed" },
-    { id: "decision", name: "Decision Process", description: "Decision makers, approval chain, evaluation process, or procurement steps were clarified" },
-    { id: "fulfillment", name: "Fulfillment", description: "A solution was proposed that directly and specifically addresses the confirmed pain" },
-    { id: "post-sell", name: "Post-Sell", description: "Concrete next steps were agreed upon to advance the deal (demo, POC, proposal, executive meeting)" },
-  ],
   meddic: [
     { id: "metrics", name: "Metrics", description: "Quantified business impact identified — specific numbers, ROI, cost savings, or success criteria stated by the prospect" },
     { id: "economic-buyer", name: "Economic Buyer", description: "The person who controls the budget and can make or veto the final purchase decision was identified" },
@@ -113,9 +108,3 @@ export const METHODOLOGY_STAGES: Record<string, MethodologyStageDefinition[]> = 
   ],
 };
 
-export const METHODOLOGY_LABELS: Record<string, string> = {
-  sandler: "Sandler Selling",
-  meddic: "MEDDIC",
-  spin: "SPIN Selling",
-  challenger: "Challenger Sale",
-};

@@ -75,7 +75,7 @@ OPENAI_API_KEY=sk-...
 ## Testing
 
 ```bash
-npm test           # Run full test suite (vitest, 286 tests)
+npm test           # Run full test suite (vitest, 319 tests)
 npm run test:watch # Watch mode
 ```
 

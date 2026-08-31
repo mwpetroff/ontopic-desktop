@@ -74,6 +74,13 @@ export interface AnalysisResult {
   riskFlags?: Array<{ text: string; type?: string }>;
   requirements?: Array<{ text: string; source?: string }>;
   painPoints?: Array<{ text: string; impact?: string }>;
+  sipocUpdate?: {
+    suppliers?: string[];
+    inputs?: string[];
+    process?: string[];
+    outputs?: string[];
+    customers?: string[];
+  };
   bantUpdate?: {
     budget?: { value: string; evidence: string } | null;
     authority?: { value: string; evidence: string } | null;
@@ -150,6 +157,10 @@ ${stageList}`);
     tasks.push(`${taskNum}. **Extract Pain Points**: Identify specific current-state problems, frustrations, failures, or gaps explicitly mentioned. Include any stated business impact where given.`);
     taskNum++;
   }
+  if (features.sipoc) {
+    tasks.push(`${taskNum}. **Map SIPOC Elements**: Identify any of the following process-mapping elements explicitly mentioned in this chunk — Suppliers (who/what provides inputs to the process), Inputs (materials, data, or requests the process consumes), Process (the steps or activities being described), Outputs (what the process produces or delivers), Customers (who receives or uses the outputs). Only include an element if this chunk gives clear evidence for it — most chunks will only touch one or two of the five categories, and many will touch none.`);
+    taskNum++;
+  }
 
   let jsonShape = `{
   "terms": [{"term":"...","definition":"...","category":"infrastructure|security|cloud|development|data|networking|methodology|business|ai-ml|devops|monitoring|collaboration|integration","type":"concept|tool|industry","capabilitySource":"...","partnerName":"..."}],
@@ -190,6 +201,9 @@ ${stageList}`);
   if (features.painPoints) {
     jsonShape += `,\n  "painPoints": [{"text":"specific problem or frustration","impact":"business impact if stated, else null"}]`;
   }
+  if (features.sipoc) {
+    jsonShape += `,\n  "sipocUpdate": {"suppliers":["..."],"inputs":["..."],"process":["..."],"outputs":["..."],"customers":["..."]}`;
+  }
   jsonShape += "\n}";
 
   const roleLabel = HOST_ROLE_LABELS[hostRole] || HOST_ROLE_LABELS.host;
@@ -225,6 +239,7 @@ ${features.timelineSignals ? `\nFor timeline signals: Capture specific dates, fi
 ${features.riskFlags ? `\nFor risk flags: Focus on what could block or slow delivery — dependencies on other teams/systems, missing approvals, technical unknowns, contractual constraints, or competing priorities. Be concise (under 20 words per item). type: dependency = must happen before this; blocker = prevents progress now; risk = might cause problems; constraint = limits options.` : ""}
 ${features.requirements ? `\nFor requirements: Capture the client's stated needs as functional outcomes ("we need X to do Y") not implementation details. One clear sentence per item. source: use the speaker's name if identifiable, else "client".` : ""}
 ${features.painPoints ? `\nFor pain points: Capture specific, named problems — not generic dissatisfaction. Each pain should describe what's broken/missing and, if stated, what business consequence it causes. Keep each under 25 words.` : ""}
+${features.sipoc ? `\nFor SIPOC: Only populate categories with clear evidence in THIS chunk — omit or leave empty any category not discussed. Keep each item under 15 words and specific (a named vendor, system, document, role, or deliverable) rather than generic. Do not force an entry into a category just to fill it out.` : ""}
 
 Return JSON:
 ${jsonShape}

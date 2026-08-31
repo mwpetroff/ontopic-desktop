@@ -3,7 +3,7 @@ import { db } from "./db";
 import { sessions, topics } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { AnalysisResult } from "./services/analysis";
-import type { SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, ReferenceProject, BANTData, BANTField, MethodologyProgress } from "@shared/schema";
+import type { SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, ReferenceProject, BANTData, BANTField, MethodologyProgress, SIPOCData, SIPOCItem } from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
 import { FeatureFlags, MethodologyStageDefinition } from "./constants";
 
@@ -233,6 +233,36 @@ export function applyMethodologyStageUpdates(
   return current;
 }
 
+const SIPOC_CATEGORIES = ["suppliers", "inputs", "process", "outputs", "customers"] as const;
+
+export function applySipocUpdates(
+  existing: SIPOCData | null | undefined,
+  update: Partial<Record<typeof SIPOC_CATEGORIES[number], string[]>> | undefined,
+  timestamp: string
+): SIPOCData | null {
+  if (!update) return existing ?? null;
+
+  const current: SIPOCData = existing ?? {
+    suppliers: [], inputs: [], process: [], outputs: [], customers: [],
+    lastUpdated: timestamp,
+  };
+  const result: SIPOCData = { ...current, lastUpdated: timestamp };
+
+  for (const category of SIPOC_CATEGORIES) {
+    const newItems = (update[category] || [])
+      .map((text) => text.trim())
+      .filter((text) => text.length > 0);
+    if (newItems.length === 0) continue;
+
+    result[category] = dedupeByText(
+      [...current[category], ...newItems.map((text) => ({ text }))],
+      (item: SIPOCItem) => item.text.toLowerCase().slice(0, 40)
+    );
+  }
+
+  return result;
+}
+
 export async function persistSessionUpdates(
   sessionId: number,
   updates: {
@@ -245,6 +275,7 @@ export async function persistSessionUpdates(
     similarProjectMatches?: any[];
     bantData?: BANTData | null;
     methodologyProgress?: MethodologyProgress | null;
+    sipocData?: SIPOCData | null;
   },
   formattedTranscript: string,
   transcriptText: string

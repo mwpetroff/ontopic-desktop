@@ -65,6 +65,7 @@ export const sessions = sqliteTable("sessions", {
   riskFlags: text("risk_flags", { mode: "json" }).$type<RiskFlag[]>(),
   requirements: text("requirements", { mode: "json" }).$type<Requirement[]>(),
   painPoints: text("pain_points", { mode: "json" }).$type<PainPoint[]>(),
+  sipocData: text("sipoc_data", { mode: "json" }).$type<SIPOCData>(),
   summary: text("summary"),
   createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
   endedAt: integer("ended_at", { mode: "timestamp" }),
@@ -242,6 +243,20 @@ export interface Requirement {
 export interface PainPoint {
   text: string;
   impact?: string;
+}
+
+export interface SIPOCItem {
+  text: string;
+  evidence?: string;
+}
+
+export interface SIPOCData {
+  suppliers: SIPOCItem[];
+  inputs: SIPOCItem[];
+  process: SIPOCItem[];
+  outputs: SIPOCItem[];
+  customers: SIPOCItem[];
+  lastUpdated: string;
 }
 
 export interface SimilarProjectMatch {

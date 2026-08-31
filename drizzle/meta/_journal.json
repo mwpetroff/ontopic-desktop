@@ -15,6 +15,13 @@
       "when": 1749426000000,
       "tag": "0001_role_layouts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788206961240,
+      "tag": "0002_sipoc",
+      "breakpoints": true
     }
   ]
 }

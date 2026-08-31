@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { featuresForRole } from "../server/constants";
+import { featuresForRole, METHODOLOGY_STAGES } from "../server/constants";
 
 describe("featuresForRole", () => {
   it("always includes base flags for every role", () => {
@@ -21,6 +21,7 @@ describe("featuresForRole", () => {
     expect(flags.riskFlags).toBeFalsy();
     expect(flags.requirements).toBeFalsy();
     expect(flags.painPoints).toBeFalsy();
+    expect(flags.sipoc).toBeFalsy();
   });
 
   it("engineer (SE) has no role-specific extras", () => {
@@ -32,6 +33,7 @@ describe("featuresForRole", () => {
     expect(flags.riskFlags).toBeFalsy();
     expect(flags.requirements).toBeFalsy();
     expect(flags.painPoints).toBeFalsy();
+    expect(flags.sipoc).toBeFalsy();
   });
 
   it("producer (PM) enables timelineSignals and riskFlags", () => {
@@ -42,12 +44,14 @@ describe("featuresForRole", () => {
     expect(flags.bantTracking).toBeFalsy();
     expect(flags.requirements).toBeFalsy();
     expect(flags.painPoints).toBeFalsy();
+    expect(flags.sipoc).toBeFalsy();
   });
 
-  it("correspondent (BA) enables requirements and painPoints", () => {
+  it("correspondent (BA) enables requirements, painPoints, and sipoc", () => {
     const flags = featuresForRole("correspondent");
     expect(flags.requirements).toBe(true);
     expect(flags.painPoints).toBe(true);
+    expect(flags.sipoc).toBe(true);
     expect(flags.competitorMentions).toBeFalsy();
     expect(flags.bantTracking).toBeFalsy();
     expect(flags.timelineSignals).toBeFalsy();
@@ -60,8 +64,17 @@ describe("featuresForRole", () => {
   });
 
   it("account-executive enables methodologyTracking when salesMethodology is set", () => {
-    const flags = featuresForRole("account-executive", "sandler");
+    const flags = featuresForRole("account-executive", "meddic");
     expect(flags.methodologyTracking).toBe(true);
+  });
+
+  it("account-executive disables methodologyTracking for a removed/unknown methodology id", () => {
+    // Regression guard for BL-008: Sandler was removed from METHODOLOGY_STAGES.
+    // A stale settings value should degrade to "no methodology" rather than
+    // silently enabling a tracker with zero stages.
+    expect(METHODOLOGY_STAGES.sandler).toBeUndefined();
+    const flags = featuresForRole("account-executive", "sandler");
+    expect(flags.methodologyTracking).toBe(false);
   });
 
   it("account-executive disables methodologyTracking when salesMethodology is null", () => {
@@ -86,6 +99,7 @@ describe("featuresForRole", () => {
     expect(flags.riskFlags).toBeFalsy();
     expect(flags.requirements).toBeFalsy();
     expect(flags.painPoints).toBeFalsy();
+    expect(flags.sipoc).toBeFalsy();
   });
 
   it("unknown role returns only base flags", () => {
@@ -97,5 +111,6 @@ describe("featuresForRole", () => {
     expect(flags.riskFlags).toBeFalsy();
     expect(flags.requirements).toBeFalsy();
     expect(flags.painPoints).toBeFalsy();
+    expect(flags.sipoc).toBeFalsy();
   });
 });

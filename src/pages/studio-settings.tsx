@@ -54,11 +54,6 @@ const HOST_ROLES = [
 
 const SALES_METHODOLOGIES = [
   {
-    id: "sandler",
-    name: "Sandler Selling",
-    description: "Pain Funnel methodology — surface pain, quantify business and personal impact, confirm budget and decision process, then present fulfillment. 8 stages tracked.",
-  },
-  {
     id: "meddic",
     name: "MEDDIC",
     description: "Enterprise sales qualification — Metrics, Economic Buyer, Decision Criteria, Decision Process, Identify Pain, Champion. 6 stages tracked.",

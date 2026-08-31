@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveSpeaker, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, mergeBantData, applyMethodologyStageUpdates, persistSessionUpdates, dedupeByText } from "../server/analysis-helpers";
+import { resolveSpeaker, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, mergeBantData, applyMethodologyStageUpdates, applySipocUpdates, persistSessionUpdates, dedupeByText } from "../server/analysis-helpers";
 import { DatabaseStorage } from "../server/storage";
 import type { AnalysisResult } from "../server/services/analysis";
 import type { SentimentEntry, SpeakerEntry, ReferenceProject } from "@shared/schema";
@@ -403,6 +403,25 @@ describe("persistSessionUpdates", () => {
     expect((updated?.painPoints as any[])[0].impact).toBe("high");
   });
 
+  it("persists sipocData for BA role", async () => {
+    const session = await makeSession();
+    const sipocData = {
+      suppliers: [{ text: "Acme Corp" }], inputs: [{ text: "Purchase requests" }],
+      process: [], outputs: [{ text: "Approved PO" }], customers: [{ text: "Finance dept" }],
+      lastUpdated: "2024-01-01T00:00:00.000Z",
+    };
+    await persistSessionUpdates(
+      session.id,
+      { totalTopics: 0, sentimentData: [], overallSentiment: 0, speakers: [], sipocData },
+      "BA chunk.",
+      "BA chunk."
+    );
+    const updated = await storage.getSession(session.id);
+    expect((updated?.sipocData as any)?.suppliers).toHaveLength(1);
+    expect((updated?.sipocData as any)?.suppliers[0].text).toBe("Acme Corp");
+    expect((updated?.sipocData as any)?.outputs[0].text).toBe("Approved PO");
+  });
+
   it("persists competitorMentions for SA role", async () => {
     const session = await makeSession();
     const competitorMentions = [{ name: "Datadog", context: "Client uses Datadog for monitoring" }];
@@ -466,6 +485,51 @@ describe("applyMethodologyStageUpdates", () => {
   it("ignores unknown stage IDs gracefully", () => {
     const result = applyMethodologyStageUpdates(null, ["unknown-stage"], "spin", spinStages, ts);
     expect(result.stages.every(s => !s.completed)).toBe(true);
+  });
+});
+
+describe("applySipocUpdates", () => {
+  const ts = "2024-01-01T00:00:00.000Z";
+
+  it("returns null when update is undefined and existing is null", () => {
+    expect(applySipocUpdates(null, undefined, ts)).toBeNull();
+  });
+
+  it("returns existing unchanged when update is undefined", () => {
+    const existing = { suppliers: [{ text: "Acme Corp" }], inputs: [], process: [], outputs: [], customers: [], lastUpdated: ts };
+    expect(applySipocUpdates(existing, undefined, ts)).toBe(existing);
+  });
+
+  it("creates all five categories from an empty start", () => {
+    const result = applySipocUpdates(null, { suppliers: ["Acme Corp"], customers: ["Finance dept"] }, ts);
+    expect(result?.suppliers).toEqual([{ text: "Acme Corp" }]);
+    expect(result?.customers).toEqual([{ text: "Finance dept" }]);
+    expect(result?.inputs).toEqual([]);
+    expect(result?.lastUpdated).toBe(ts);
+  });
+
+  it("only touches categories present in the update", () => {
+    const existing = { suppliers: [{ text: "Acme Corp" }], inputs: [{ text: "Invoices" }], process: [], outputs: [], customers: [], lastUpdated: "2023-01-01T00:00:00.000Z" };
+    const result = applySipocUpdates(existing, { process: ["Manual re-entry"] }, ts);
+    expect(result?.suppliers).toEqual([{ text: "Acme Corp" }]);
+    expect(result?.inputs).toEqual([{ text: "Invoices" }]);
+    expect(result?.process).toEqual([{ text: "Manual re-entry" }]);
+  });
+
+  it("dedupes new items against existing items in the same category (case-insensitive)", () => {
+    const existing = { suppliers: [{ text: "Acme Corp" }], inputs: [], process: [], outputs: [], customers: [], lastUpdated: ts };
+    const result = applySipocUpdates(existing, { suppliers: ["acme corp", "Beta LLC"] }, ts);
+    expect(result?.suppliers).toEqual([{ text: "Acme Corp" }, { text: "Beta LLC" }]);
+  });
+
+  it("ignores blank/whitespace-only strings", () => {
+    const result = applySipocUpdates(null, { suppliers: ["  ", ""] }, ts);
+    expect(result?.suppliers).toEqual([]);
+  });
+
+  it("trims whitespace from item text", () => {
+    const result = applySipocUpdates(null, { outputs: ["  Approved PO  "] }, ts);
+    expect(result?.outputs).toEqual([{ text: "Approved PO" }]);
   });
 });
 

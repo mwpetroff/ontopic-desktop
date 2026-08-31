@@ -10,8 +10,8 @@ import { isAuthenticated } from "./auth";
 import { FeatureFlags, METHODOLOGY_STAGES, featuresForRole } from "./constants";
 import { openai, analyzeText, generateSummary, withRetry } from "./services/analysis";
 import type { AnalysisResult } from "./services/analysis";
-import type { SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, ReferenceProject, BANTData, MethodologyProgress } from "@shared/schema";
-import { resolveSpeaker, updateSessionTopics, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, persistSessionUpdates, mergeBantData, applyMethodologyStageUpdates, dedupeByText } from "./analysis-helpers";
+import type { SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, ReferenceProject, BANTData, MethodologyProgress, SIPOCData } from "@shared/schema";
+import { resolveSpeaker, updateSessionTopics, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, persistSessionUpdates, mergeBantData, applyMethodologyStageUpdates, applySipocUpdates, dedupeByText } from "./analysis-helpers";
 import { getTopicFrequency, getTopicTrends, getGapAnalysis, getNeedsVsOfferings, getDistinctIndustries, buildSessionGraph } from "./analytics";
 
 const audioBodyParser = express.json({ limit: "50mb" });
@@ -249,6 +249,9 @@ async function processAnalysis(
         timestamp
       )
     : null;
+  const updatedSipocData = features.sipoc
+    ? applySipocUpdates((session as any).sipocData as SIPOCData | null, analysis.sipocUpdate, timestamp)
+    : null;
 
   // Accumulate role-specific fields
   type CompetitorMention = { name: string; context: string };
@@ -288,6 +291,7 @@ async function processAnalysis(
       ...(newSimilarMatches.length > 0 ? { similarProjectMatches: updatedSimilarMatches } : {}),
       ...(updatedBantData ? { bantData: updatedBantData } : {}),
       ...(updatedMethodologyProgress ? { methodologyProgress: updatedMethodologyProgress } : {}),
+      ...(updatedSipocData ? { sipocData: updatedSipocData } : {}),
       ...(updatedCompetitorMentions ? { competitorMentions: updatedCompetitorMentions } : {}),
       ...(updatedTimelineSignals ? { timelineSignals: updatedTimelineSignals } : {}),
       ...(updatedRiskFlags ? { riskFlags: updatedRiskFlags } : {}),
@@ -314,6 +318,7 @@ async function processAnalysis(
     similarProjects: newSimilarMatches,
     bantData: updatedBantData,
     methodologyProgress: updatedMethodologyProgress,
+    sipocData: updatedSipocData,
     competitorMentions: analysis.competitorMentions || [],
     allCompetitorMentions: updatedCompetitorMentions || [],
     timelineSignals: analysis.timelineSignals || [],
@@ -354,7 +359,7 @@ export async function registerRoutes(
     analysisModel: z.enum(["gpt-4o-mini", "gpt-4o", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4.1", "o3-mini", "o4-mini"]).optional(),
     transcriptionModel: z.enum(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]).optional(),
     caseStudyUrls: z.array(z.string().url()).optional(),
-    salesMethodology: z.enum(["sandler", "meddic", "spin", "challenger"]).nullable().optional(),
+    salesMethodology: z.enum(["meddic", "spin", "challenger"]).nullable().optional(),
   });
 
   app.patch("/api/settings", async (req, res) => {
@@ -468,6 +473,14 @@ export async function registerRoutes(
       title: z.string().optional(),
       role: z.enum(["host", "guest"]).optional(),
     })).optional(),
+    sipocData: z.object({
+      suppliers: z.array(z.object({ text: z.string(), evidence: z.string().optional() })),
+      inputs: z.array(z.object({ text: z.string(), evidence: z.string().optional() })),
+      process: z.array(z.object({ text: z.string(), evidence: z.string().optional() })),
+      outputs: z.array(z.object({ text: z.string(), evidence: z.string().optional() })),
+      customers: z.array(z.object({ text: z.string(), evidence: z.string().optional() })),
+      lastUpdated: z.string(),
+    }).optional(),
   });
 
   app.patch("/api/sessions/:id", async (req, res) => {

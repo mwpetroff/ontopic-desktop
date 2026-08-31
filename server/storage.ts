@@ -51,7 +51,7 @@ export class DatabaseStorage implements IStorage {
   async getSettings(): Promise<Settings> {
     const [existing] = await db.select().from(settings);
     if (existing) return existing;
-    const [created] = await db.insert(settings).values({}).returning();
+    const [created] = await db.insert(settings).values({ salesMethodology: "meddic" }).returning();
     return created;
   }
 

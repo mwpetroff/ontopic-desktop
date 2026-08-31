@@ -32,8 +32,9 @@ import {
 } from "lucide-react";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { matchSpeaker } from "@/lib/speaker-match";
-import type { Session, Topic, VoiceProfile, SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, SimilarProjectMatch, ReferenceProject, BANTData, MethodologyProgress, CompetitorMention, TimelineSignal, RiskFlag, Requirement, PainPoint } from "@shared/schema";
+import type { Session, Topic, VoiceProfile, SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, SimilarProjectMatch, ReferenceProject, BANTData, MethodologyProgress, CompetitorMention, TimelineSignal, RiskFlag, Requirement, PainPoint, SIPOCData } from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
+import { METHODOLOGY_LABELS } from "@shared/methodologies";
 import { useSettings } from "@/hooks/use-settings";
 
 async function pollAnalysisJob(sessionId: number, jobId: string): Promise<unknown> {
@@ -101,13 +102,13 @@ const AE_DEMO_CHUNKS = [
   "Thank you both. Jennifer Walsh, CTO at Meridian Financial. We're a mid-size wealth management and lending firm — around eighteen hundred employees across twelve offices. I'll let Raj introduce himself as well, and then I'll walk you through why we reached out.",
   "Raj Patel, CISO at Meridian. I'm joining primarily from a security and compliance angle. Any cloud migration we undertake has to meet our FedRAMP and SOC 2 obligations, so I'll be involved in evaluating any vendor or architecture decisions we move forward with.",
   "So — the reason we reached out is that our on-premises data infrastructure has become a serious liability. We're running a fifteen-year-old Oracle data warehouse on aging HPE hardware, and the maintenance cost and risk of failure have honestly reached a tipping point. We had an unplanned outage in January that took our entire reporting environment down for six hours. For a financial services firm, that is simply not acceptable. On top of that, we're under increasing OCC and SEC scrutiny, and our current environment makes producing audit trails incredibly painful — our compliance team spends weeks manually pulling data for each examination.",
-  "Jennifer, that context is really helpful. The January outage and the compliance exposure sound like the key drivers here. I want to make sure we understand the decision and investment landscape correctly — who else is at the table for a project of this scope? And has the board given any direction on budget or appetite for this kind of migration?",
-  "The board approved a digital infrastructure modernization budget right after the January outage. I own the technology roadmap and the vendor selection — that's within my remit. We've earmarked six hundred thousand dollars for the platform migration in this fiscal year, with a phase two budget of similar size for the analytics layer. Raj has final sign-off on any cloud architecture from a security standpoint. On timeline — we have an OCC examination scheduled for September, which means we need to be fully operational and auditable by end of July. That means a signed engagement by end of May at the absolute latest.",
+  "Jennifer, that context is really helpful. The January outage and the compliance exposure sound like the key drivers here. I want to make sure we understand the decision and investment landscape correctly — who else is at the table for a project of this scope? And has the board given any direction on budget or appetite for this kind of migration? One more thing before we get into numbers — when we're successful here a year from now, what does that actually look like? Is there a specific metric the board will be measuring this against?",
+  "The board approved a digital infrastructure modernization budget right after the January outage. I own the technology roadmap and the vendor selection — that's within my remit. We've earmarked six hundred thousand dollars for the platform migration in this fiscal year, with a phase two budget of similar size for the analytics layer. Raj has final sign-off on any cloud architecture from a security standpoint. On timeline — we have an OCC examination scheduled for September, which means we need to be fully operational and auditable by end of July. That means a signed engagement by end of May at the absolute latest. As for what success looks like — the board wants two numbers by next year's review: audit preparation time down from weeks to under forty-eight hours, and ninety-nine point nine percent uptime on the reporting environment. Those are the figures I'll be held to.",
   "Sorry to jump in here — I'm joining from the finance team. I just want to flag that any spend above five hundred thousand typically goes through an additional board approval cycle, so the six hundred K figure may need to be structured carefully across fiscal quarters to stay within delegated authority limits.",
   "That's a really important point, and I appreciate you flagging it. We can absolutely work with you on phasing the engagement to fit within those approval thresholds — that's something we've navigated before with other clients in regulated industries. Jennifer, Raj — given the hard July deadline, I'd like to propose a four-week architecture assessment as a concrete first step. It gives us something to bring back to the board, with compliance and data lineage baked in from day one. Before we close out today, are there any other stakeholders we should loop in for the assessment kickoff?",
   "Before we go any further on document sharing — and I appreciate the offer of the architecture documentation — I need to flag that any exchange of sensitive infrastructure details, including our Oracle schema or the OCC exam report, will require a mutual NDA to be in place first. That is a hard requirement from our legal team. I don't want it to slow things down, but it can't be an afterthought either.",
   "Raj, completely understood, and we wouldn't have it any other way. Let's make getting the mutual NDA signed action item number one. David will reach out to your legal contact by end of this week to get that process started. We've done this with other regulated clients and we can typically turn it around within a few business days. Once it's signed we are ready to move immediately on the architecture documentation.",
-  "Perfect. So our action items: number one, mutual NDA — David and Raj's legal team to coordinate by end of week. Number two, Raj sends the security questionnaire once the NDA is in place. Number three, I'll share the architecture documentation and the OCC exam report. Number four, Alex delivers a brief scope document for the four-week assessment. And let's reconnect next Thursday to confirm everything is in motion before end of month. Thanks everyone — this was a productive first conversation.",
+  "Perfect. So our action items: number one, mutual NDA — David and Raj's legal team to coordinate by end of week. Number two, Raj sends the security questionnaire once the NDA is in place. Number three, I'll share the architecture documentation and the OCC exam report. Number four, Alex delivers a brief scope document for the four-week assessment. On my end, I'll personally walk this through our technology steering committee next week so the phase-two budget is already teed up by the time your assessment wraps — I don't want funding to be the thing that slows us down. Let's reconnect next Thursday to confirm everything is in motion before end of month. Thanks everyone — this was a productive first conversation.",
 ];
 
 // Parallel voice arrays — index matches the corresponding chunk array
@@ -249,18 +250,19 @@ const PM_DEMO_SPEAKERS = [
   "Marcus Chen", "Janelle Brooks", "Janelle Brooks",
 ];
 
-const METHODOLOGY_LABELS: Record<string, string> = {
-  sandler: "Sandler Selling",
-  meddic: "MEDDIC",
-  spin: "SPIN Selling",
-  challenger: "Challenger Sale",
-};
-
 const BANT_KEYS = [
   { key: "budget" as keyof BANTData, label: "Budget", icon: DollarSign, color: "text-emerald-500" },
   { key: "authority" as keyof BANTData, label: "Authority", icon: UserCheck, color: "text-blue-500" },
   { key: "needs" as keyof BANTData, label: "Needs", icon: Target, color: "text-amber-500" },
   { key: "timeline" as keyof BANTData, label: "Timeline", icon: Clock, color: "text-purple-500" },
+];
+
+const SIPOC_COLUMNS = [
+  { key: "suppliers" as keyof Omit<SIPOCData, "lastUpdated">, label: "Suppliers" },
+  { key: "inputs" as keyof Omit<SIPOCData, "lastUpdated">, label: "Inputs" },
+  { key: "process" as keyof Omit<SIPOCData, "lastUpdated">, label: "Process" },
+  { key: "outputs" as keyof Omit<SIPOCData, "lastUpdated">, label: "Outputs" },
+  { key: "customers" as keyof Omit<SIPOCData, "lastUpdated">, label: "Customers" },
 ];
 
 type SentimentPoint = SentimentEntry;
@@ -326,6 +328,7 @@ export default function Dashboard() {
   const [riskFlags, setRiskFlags] = useState<RiskFlag[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [painPoints, setPainPoints] = useState<PainPoint[]>([]);
+  const [sipocData, setSipocData] = useState<SIPOCData | null>(null);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
   const [showLowAudioWarning, setShowLowAudioWarning] = useState(false);
   const lowAudioTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -434,6 +437,7 @@ export default function Dashboard() {
       setRiskFlags([]);
       setRequirements([]);
       setPainPoints([]);
+      setSipocData(null);
       queryClient.invalidateQueries({ queryKey: ["/api/sessions"] });
       navigate(`/sessions/${id}`);
     },
@@ -499,6 +503,7 @@ export default function Dashboard() {
       else if (data.requirements?.length) setRequirements(prev => [...prev, ...data.requirements]);
       if (data.allPainPoints) setPainPoints(data.allPainPoints);
       else if (data.painPoints?.length) setPainPoints(prev => [...prev, ...data.painPoints]);
+      if (data.sipocData) setSipocData(data.sipocData);
 
       if (data.newTopics && data.newTopics.length > 0) {
         await refetchTopics();
@@ -864,6 +869,16 @@ export default function Dashboard() {
         demoSessionTitle = "Demo: Sales Discovery — Meridian Financial";
         demoClientName = "Meridian Financial"; demoIndustry = "Financial Services";
         demoRefProjects = AE_DEMO_REFERENCE_PROJECTS;
+        // Methodology tracking only activates once a methodology is selected in
+        // Settings. Fresh installs default to MEDDIC (server/storage.ts), but an
+        // existing install that predates that default may still have it unset —
+        // set it here so the AE demo reliably shows the methodology tracker.
+        if (!settings?.salesMethodology) {
+          try {
+            await apiRequest("PATCH", "/api/settings", { salesMethodology: "meddic" });
+            queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+          } catch {}
+        }
       } else if (role === "correspondent") {
         demoChunks = BA_DEMO_CHUNKS; demoSpeakers = BA_DEMO_SPEAKERS; demoAudioPrefix = "ba-demo";
         demoSessionTitle = "Demo: Procurement Requirements Workshop";
@@ -928,6 +943,7 @@ export default function Dashboard() {
       setRiskFlags([]);
       setRequirements([]);
       setPainPoints([]);
+      setSipocData(null);
 
       demoAnimationRef.current = setInterval(() => {
         setDemoAudioLevel(Math.random() * 0.6 + 0.2);
@@ -1492,9 +1508,9 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
-                  ) : settings?.salesMethodology ? (
+                  ) : settings?.salesMethodology && METHODOLOGY_LABELS[settings.salesMethodology] ? (
                     <div>
-                      <p className="text-[10px] font-semibold text-foreground mb-1">{METHODOLOGY_LABELS[settings.salesMethodology as string] ?? settings.salesMethodology}</p>
+                      <p className="text-[10px] font-semibold text-foreground mb-1">{METHODOLOGY_LABELS[settings.salesMethodology as string]}</p>
                       <p className="text-[9px] text-muted-foreground/50">Stages will appear as analysis progresses.</p>
                     </div>
                   ) : (
@@ -1938,8 +1954,9 @@ export default function Dashboard() {
               )}
               <Tabs defaultValue="followups" className="flex-1 min-h-0 flex flex-col">
                 <div className="px-2 pt-2 pb-0 shrink-0">
-                  <TabsList className="h-7 w-full grid grid-cols-4">
+                  <TabsList className="h-7 w-full grid grid-cols-5">
                     <TabsTrigger value="followups" className="text-[10px] px-0 h-6">Questions</TabsTrigger>
+                    <TabsTrigger value="sipoc" className="text-[10px] px-0 h-6" data-testid="tab-ba-sipoc">SIPOC</TabsTrigger>
                     <TabsTrigger value="topics" className="text-[10px] px-0 h-6">Topics</TabsTrigger>
                     <TabsTrigger value="actions" className="text-[10px] px-0 h-6">Actions</TabsTrigger>
                     <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
@@ -1947,6 +1964,29 @@ export default function Dashboard() {
                 </div>
                 <TabsContent value="followups" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
                   {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Questions surface as the call progresses.</p>}
+                </TabsContent>
+                <TabsContent value="sipoc" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {sipocData && SIPOC_COLUMNS.some(c => sipocData[c.key].length > 0) ? (
+                    <div className="space-y-2.5">
+                      {SIPOC_COLUMNS.map(col => (
+                        <div key={col.key} className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{col.label}</span>
+                            {sipocData[col.key].length > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1">{sipocData[col.key].length}</Badge>}
+                          </div>
+                          {sipocData[col.key].length > 0 ? (
+                            <ul className="space-y-0.5">
+                              {sipocData[col.key].map((item, i) => (
+                                <li key={i} className="text-[11px] leading-snug text-foreground/90">{item.text}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground/40">Not yet identified.</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-xs text-muted-foreground/50 py-4 text-center">Suppliers, inputs, process, outputs, and customers surface here as the process is described.</p>}
                 </TabsContent>
                 <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
                   {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}

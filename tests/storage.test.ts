@@ -19,6 +19,11 @@ describe("Storage: Settings", () => {
     expect(settings.hostRole).toBeDefined();
   });
 
+  it("defaults salesMethodology to meddic on first creation (BL-008)", async () => {
+    const settings = await storage.getSettings();
+    expect(settings.salesMethodology).toBe("meddic");
+  });
+
   it("updateSettings changes hostRole", async () => {
     const original = await storage.getSettings();
     const updated = await storage.updateSettings({ hostRole: "engineer" });
