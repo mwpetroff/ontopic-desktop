@@ -43,12 +43,18 @@ export function SipocBoard({
         {SIPOC_COLUMNS.map((col, i) => (
           <div key={col.key} className="flex items-stretch flex-1 min-w-0">
             <div
-              className={`flex flex-col items-center justify-center rounded-t-md text-white flex-1 min-w-0 ${col.header} ${compact ? "py-1" : "py-2"}`}
+              className={`flex flex-col items-center justify-center rounded-t-md text-white flex-1 min-w-0 text-center ${col.header} ${compact ? "py-1" : "py-2"}`}
             >
-              <span className={compact ? "text-xs font-black leading-none" : "text-xl font-black leading-none"}>{col.letter}</span>
-              {!compact && (
-                <span className="text-[9px] font-semibold uppercase tracking-wider opacity-90 mt-0.5">{col.label}</span>
-              )}
+              {!compact && <span className="text-xl font-black leading-none">{col.letter}</span>}
+              <span
+                className={
+                  compact
+                    ? "text-[8px] font-semibold uppercase tracking-wide leading-tight px-0.5"
+                    : "text-[9px] font-semibold uppercase tracking-wider opacity-90 mt-0.5"
+                }
+              >
+                {col.label}
+              </span>
             </div>
             {i < SIPOC_COLUMNS.length - 1 && (
               <div className="flex items-center justify-center w-3 shrink-0" aria-hidden="true">
