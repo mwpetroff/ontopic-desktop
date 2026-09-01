@@ -82,28 +82,47 @@ export function SipocBoard({
             Confirmed Chains — traced from the full transcript
           </span>
           <div className="space-y-1">
-            {links!.map((link, i) => (
-              <div
-                key={i}
-                className={`grid grid-cols-5 ${compact ? "gap-0.5" : "gap-1.5"} items-stretch`}
-                data-testid={`sipoc-link-${i}`}
-                title={link.evidence}
-              >
-                {SIPOC_COLUMNS.map((col) => {
-                  const value = link[col.linkKey];
-                  return (
-                    <div
-                      key={col.key}
-                      className={`rounded border min-w-0 ${compact ? "px-1 py-0.5" : "px-2 py-1.5"} ${value ? col.card : "border-dashed border-muted-foreground/15"}`}
-                    >
-                      <span className={`${compact ? "text-[9px]" : "text-xs"} leading-snug ${value ? "" : "text-muted-foreground/30"}`}>
-                        {value || "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+            {links!.map((link, i) => {
+              const values = SIPOC_COLUMNS.map((col) => link[col.linkKey]);
+              return (
+                <div
+                  key={i}
+                  className={`group flex items-stretch rounded-md border border-transparent hover:border-primary/40 hover:bg-muted/40 transition-colors ${compact ? "gap-0.5 p-0.5" : "gap-1 p-1"} ${i % 2 === 1 ? "bg-muted/20" : ""}`}
+                  data-testid={`sipoc-link-${i}`}
+                  title={link.evidence}
+                >
+                  <span className={`flex items-center justify-center shrink-0 rounded-full bg-muted text-muted-foreground/70 font-semibold ${compact ? "w-4 h-4 text-[8px]" : "w-5 h-5 text-[10px]"}`}>
+                    {i + 1}
+                  </span>
+                  <div className="flex items-stretch flex-1 min-w-0">
+                    {SIPOC_COLUMNS.map((col, colIdx) => {
+                      const value = values[colIdx];
+                      const nextValue = colIdx < SIPOC_COLUMNS.length - 1 ? values[colIdx + 1] : undefined;
+                      return (
+                        <div key={col.key} className="flex items-stretch flex-1 min-w-0">
+                          <div
+                            className={`rounded border flex-1 min-w-0 flex items-center ${compact ? "px-1 py-0.5" : "px-2 py-1.5"} ${value ? col.card : "border-transparent"}`}
+                          >
+                            <span className={`${compact ? "text-[9px]" : "text-xs"} leading-snug ${value ? "" : "text-muted-foreground/25"}`}>
+                              {value || "·"}
+                            </span>
+                          </div>
+                          {colIdx < SIPOC_COLUMNS.length - 1 && (
+                            <div className="flex items-center justify-center w-3 shrink-0" aria-hidden="true">
+                              {value && nextValue ? (
+                                <ChevronRight className={`text-muted-foreground/60 ${compact ? "h-2.5 w-2.5" : "h-3 w-3"}`} />
+                              ) : (
+                                <span className="text-muted-foreground/15">·</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
