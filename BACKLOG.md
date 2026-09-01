@@ -214,6 +214,61 @@ selecting it.
 
 ---
 
+### BL-010 · SIPOC connection-linking wrap-up pass
+**Priority:** Medium | **Type:** Feature (BA persona) | **Status:** ✅ Implemented
+
+Live per-chunk SIPOC extraction classifies each mention into one of five independent buckets
+(suppliers/inputs/process/outputs/customers) with no cross-referencing — it has no way to know
+a supplier named in chunk 2 relates to an output named in chunk 6. Fix: a **post-session
+refinement pass**, fired once the full transcript is available, that traces real
+supplier→input→process→output→customer chains. Mirrors `generateSummary()`'s existing
+fire-once-at-session-end shape rather than inventing a new pattern.
+
+**Architecture**
+- `shared/schema.ts`: new `SIPOCLink { supplier?, input?, process?, output?, customer?,
+  evidence? }` (a link is one row, so its fields are singular — deliberately distinct from
+  `SIPOCData`'s plural bucket names); `SIPOCData` gains optional `links?: SIPOCLink[]` and
+  `linkedAt?: string`.
+- `server/services/analysis.ts`: new `linkSipocElements(sessionId, transcript)` — sends the full
+  transcript plus the already-extracted flat lists (as grounding/anchoring context) to the model,
+  asks it to assert only clearly-supported links, explicitly allows partial rows and leaving
+  items unlinked rather than forcing weak connections. Persists onto `session.sipocData.links`.
+- `server/routes.ts`: fired as a fire-and-forget background call in `PATCH /api/sessions/:id/end`
+  alongside the existing `generateSummary()` call. New standalone `POST
+  /api/sessions/:id/link-sipoc` endpoint (mirrors `/generate-summary`) backs a manual retry
+  button for sessions where the automatic pass hasn't finished yet, or older sessions that
+  predate this feature.
+
+**UI**
+- `SipocBoard` accepts an optional `links` prop. When present, renders a "Confirmed Chains" row
+  per link (reusing the five-color-column visual identity, one row = one real relationship) above
+  a "Not Yet Linked" section listing any flat items no link references — nothing gets silently
+  dropped. Falls back to today's independent-column view when links aren't present yet (always
+  true during a live call, since linking only runs at session end).
+- Session-detail SIPOC tab: a "Link Suppliers → Customers" button appears when the session is
+  completed and has no links yet.
+
+**Excel / Copy**
+- `formatSipoc()` and the Excel "SIPOC" sheet both render linked rows first (one row per
+  confirmed chain) when available, then a "Not Yet Linked" section for anything left over —
+  otherwise fall back to the original independent-columns-padded-to-max-length format.
+
+**Deliberately deferred:** generalizing this same "live per-chunk extraction + one full-context
+wrap-up refinement pass" pattern to other roles' structured data — BANT reconciliation across
+the whole call, Requirements/Pain Points dedup, Timeline Signals/Risk Flags consolidation,
+Competitor Mentions cleanup. The pattern is proven out here; extending it to every role's data
+is a much larger sweep better scoped as its own follow-on once this lands and holds up in use.
+
+**Docs / Tests**
+- `tests/format-copy-text.test.ts`: linked-chain rendering + Not-Yet-Linked filtering.
+- `tests/export-excel.test.ts`: linked-row SIPOC sheet, and the Not-Yet-Linked section correctly
+  omitted when every item is linked.
+- No unit tests for `linkSipocElements`'s AI call itself, consistent with `analyzeText`/
+  `generateSummary` — none of this codebase's OpenAI-calling functions are mocked/unit-tested;
+  verified instead via the real API against a running server.
+
+---
+
 ## Completed
 
 | Item | Commit |

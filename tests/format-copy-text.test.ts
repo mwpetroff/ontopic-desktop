@@ -39,6 +39,28 @@ describe("format-copy-text", () => {
       lastUpdated: "2026-01-01T00:00:00.000Z",
     });
     expect(text).toContain("Suppliers:\n- Acme Corp");
+  });
+
+  it("formatSipoc renders confirmed chains as arrows when links are present", () => {
+    const text = formatSipoc({
+      suppliers: [{ text: "Acme Corp" }], inputs: [{ text: "Invoices" }], process: [], outputs: [], customers: [],
+      links: [{ supplier: "Acme Corp", input: "Invoices", evidence: "Acme sends us invoices" }],
+      lastUpdated: "2026-01-01T00:00:00.000Z",
+    });
+    expect(text).toContain("Confirmed Chains:\nAcme Corp → Invoices");
+  });
+
+  it("formatSipoc lists items not covered by any link under Not Yet Linked", () => {
+    const text = formatSipoc({
+      suppliers: [{ text: "Acme Corp" }, { text: "Beacon Logistics" }],
+      inputs: [{ text: "Invoices" }],
+      process: [], outputs: [], customers: [],
+      links: [{ supplier: "Acme Corp", input: "Invoices" }],
+      lastUpdated: "2026-01-01T00:00:00.000Z",
+    });
+    expect(text).toContain("Not Yet Linked:");
+    expect(text).toContain("Suppliers:\n- Beacon Logistics");
+    expect(text).not.toContain("- Acme Corp\n"); // Acme Corp is linked, shouldn't appear in the unlinked section
     expect(text).toContain("Inputs:\n(none)");
   });
 

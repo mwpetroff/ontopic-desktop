@@ -83,4 +83,36 @@ describe("buildBaTabsWorkbook", () => {
     expect(sheet.getRow(3).getCell(1).value).toBe("Beta LLC");
     expect(sheet.getRow(3).getCell(2).value).toBe(""); // padded — inputs only had 1 item
   });
+
+  it("SIPOC sheet renders one row per link when links are present, then a Not Yet Linked section", () => {
+    const workbook = buildBaTabsWorkbook(makeSession({
+      sipocData: {
+        suppliers: [{ text: "Acme Corp" }, { text: "Beacon Logistics" }],
+        inputs: [{ text: "Invoices" }],
+        process: [], outputs: [], customers: [],
+        links: [{ supplier: "Acme Corp", input: "Invoices" }],
+        lastUpdated: "2026-01-01T00:00:00.000Z",
+      } as any,
+    }));
+    const sheet = workbook.getWorksheet("SIPOC")!;
+    // Row 1: header. Row 2: the one link. Row 3: blank separator. Row 4: "Not Yet Linked" label. Row 5: Beacon Logistics.
+    expect(sheet.getRow(2).getCell(1).value).toBe("Acme Corp");
+    expect(sheet.getRow(2).getCell(2).value).toBe("Invoices");
+    expect(sheet.getRow(4).getCell(1).value).toBe("Not Yet Linked");
+    expect(sheet.getRow(5).getCell(1).value).toBe("Beacon Logistics");
+  });
+
+  it("SIPOC sheet skips the Not Yet Linked section when every item is linked", () => {
+    const workbook = buildBaTabsWorkbook(makeSession({
+      sipocData: {
+        suppliers: [{ text: "Acme Corp" }],
+        inputs: [{ text: "Invoices" }],
+        process: [], outputs: [], customers: [],
+        links: [{ supplier: "Acme Corp", input: "Invoices" }],
+        lastUpdated: "2026-01-01T00:00:00.000Z",
+      } as any,
+    }));
+    const sheet = workbook.getWorksheet("SIPOC")!;
+    expect(sheet.rowCount).toBe(2); // header + the one link row, no Not Yet Linked section
+  });
 });

@@ -8,6 +8,7 @@ import {
   HOST_ROLE_SUMMARY_FOCUS,
   type MethodologyStageDefinition,
 } from "../constants";
+import type { SIPOCData, SIPOCLink } from "@shared/schema";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "not-configured",
@@ -346,4 +347,72 @@ Write in third person. Do not use bullet points. Do not start with "In this meet
     await storage.updateSession(sessionId, { summary });
   }
   return summary;
+}
+
+// Post-session refinement pass: the live per-chunk SIPOC extraction (analyzeText) only
+// ever sees one chunk at a time, so it can classify "Acme Manufacturing" as a supplier
+// and "audit trail" as an output without any way to know they're related — that relation
+// might be stated three chunks apart. Once the session ends and the full transcript is
+// available, one pass over the whole thing can attempt real supplier→input→process→
+// output→customer chains. Mirrors generateSummary's fire-once-at-session-end shape.
+export async function linkSipocElements(sessionId: number, transcript: string): Promise<SIPOCLink[]> {
+  const session = await storage.getSession(sessionId);
+  const sipocData = session?.sipocData as SIPOCData | null;
+  if (!sipocData) return [];
+
+  const hasAnyItems = ["suppliers", "inputs", "process", "outputs", "customers"].some(
+    (k) => (sipocData[k as keyof SIPOCData] as { text: string }[] | undefined)?.length
+  );
+  if (!hasAnyItems) return [];
+
+  const appSettings = await storage.getSettings();
+  const model = appSettings.analysisModel || "gpt-4o-mini";
+
+  const listBlock = (label: string, items: { text: string }[]) =>
+    `${label}: ${items.length ? items.map((i) => `"${i.text}"`).join(", ") : "(none identified)"}`;
+
+  const links = await withRetry(
+    async () => {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: `You are analyzing a full meeting transcript to connect SIPOC (Suppliers, Inputs, Process, Outputs, Customers) elements that were already identified separately during the call. Your job is to determine which of these elements actually relate to each other, now that you can see the whole conversation.
+
+Already identified (from live analysis, chunk by chunk — may be incomplete or contain items that turn out unrelated):
+${listBlock("Suppliers", sipocData.suppliers)}
+${listBlock("Inputs", sipocData.inputs)}
+${listBlock("Process", sipocData.process)}
+${listBlock("Outputs", sipocData.outputs)}
+${listBlock("Customers", sipocData.customers)}
+
+Using the full transcript below, identify chains of the form supplier → input → process → output → customer. Reuse the exact wording from the lists above when linking an already-identified item. A chain does NOT need all five parts — most will only have two or three. Only assert a link when the transcript gives clear support for it (the same sentence or closely adjacent sentences connecting them); do not guess or force a connection that isn't stated. It is normal and expected for some items above to end up in no link at all — leave them out rather than inventing a weak connection. If you find a genuinely new element that the live analysis missed while reading the full transcript, you may include it, but don't fabricate anything not grounded in the text.
+
+Return JSON: {"links": [{"supplier": "... or omit", "input": "... or omit", "process": "... or omit", "output": "... or omit", "customer": "... or omit", "evidence": "short quote from the transcript supporting this link"}]}
+Omit any field a given link doesn't have — don't include empty strings. Return {"links": []} if nothing can be confidently linked.`,
+          },
+          { role: "user", content: transcript },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+        max_completion_tokens: 1500,
+      });
+      const text = response.choices[0]?.message?.content || "{}";
+      try {
+        const parsed = JSON.parse(text) as { links?: SIPOCLink[] };
+        return Array.isArray(parsed.links) ? parsed.links : [];
+      } catch {
+        return [];
+      }
+    },
+    { label: `linkSipocElements(session=${sessionId})`, fallback: [] as SIPOCLink[] }
+  );
+
+  if (links.length > 0) {
+    await storage.updateSession(sessionId, {
+      sipocData: { ...sipocData, links, linkedAt: new Date().toISOString() },
+    });
+  }
+  return links;
 }

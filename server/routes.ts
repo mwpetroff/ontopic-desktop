@@ -8,7 +8,7 @@ import { detectAudioFormat } from "./replit_integrations/audio/client";
 import { z } from "zod";
 import { isAuthenticated } from "./auth";
 import { FeatureFlags, METHODOLOGY_STAGES, featuresForRole } from "./constants";
-import { openai, analyzeText, generateSummary, withRetry } from "./services/analysis";
+import { openai, analyzeText, generateSummary, linkSipocElements, withRetry } from "./services/analysis";
 import type { AnalysisResult } from "./services/analysis";
 import type { SentimentEntry, ActionItem, FollowUpQuestion, SpeakerEntry, ReferenceProject, BANTData, MethodologyProgress, SIPOCData } from "@shared/schema";
 import { resolveSpeaker, updateSessionTopics, aggregateSentiment, accumulateSimilarProjects, updateSpeakersList, persistSessionUpdates, mergeBantData, applyMethodologyStageUpdates, applySipocUpdates, dedupeByText } from "./analysis-helpers";
@@ -509,6 +509,9 @@ export async function registerRoutes(
         generateSummary(id, session.transcript).catch((err) =>
           console.error("Background summary generation failed:", err)
         );
+        linkSipocElements(id, session.transcript).catch((err) =>
+          console.error("Background SIPOC linking failed:", err)
+        );
       }
 
       res.json(session);
@@ -531,6 +534,22 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating summary:", error);
       res.status(500).json({ error: "Failed to generate summary" });
+    }
+  });
+
+  app.post("/api/sessions/:id/link-sipoc", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const session = await storage.getSession(id);
+      if (!session) return res.status(404).json({ error: "Session not found" });
+      if (!session.transcript || session.transcript.length < 200) {
+        return res.status(400).json({ error: "Not enough transcript to link SIPOC elements" });
+      }
+      const links = await linkSipocElements(id, session.transcript);
+      res.json({ links });
+    } catch (error) {
+      console.error("Error linking SIPOC elements:", error);
+      res.status(500).json({ error: "Failed to link SIPOC elements" });
     }
   });
 

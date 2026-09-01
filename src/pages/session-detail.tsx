@@ -133,7 +133,7 @@ export default function SessionDetail() {
     },
   });
 
-  function removeSipocItem(category: keyof Omit<SIPOCData, "lastUpdated">, index: number) {
+  function removeSipocItem(category: keyof Omit<SIPOCData, "lastUpdated" | "links" | "linkedAt">, index: number) {
     if (!session?.sipocData) return;
     const current = session.sipocData as SIPOCData;
     const updated: SIPOCData = {
@@ -142,6 +142,16 @@ export default function SessionDetail() {
     };
     updateSipocMutation.mutate(updated);
   }
+
+  const linkSipocMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/sessions/${sessionId}/link-sipoc`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sessions", sessionId] });
+    },
+  });
 
   const autoGenerateTriggered = useRef(false);
   useEffect(() => {
@@ -704,8 +714,27 @@ export default function SessionDetail() {
             <TabsContent value="sipoc" className="flex-1 overflow-hidden mt-0">
               <ScrollArea className="h-full">
                 <div className="p-4">
-                  <div className="flex justify-end mb-2"><CopyButton getText={() => formatSipoc(sessionSipoc)} label="SIPOC" /></div>
-                  <SipocBoard data={sessionSipoc} onRemoveItem={removeSipocItem} />
+                  <div className="flex justify-end items-center gap-2 mb-2">
+                    {!sessionSipoc.links?.length && session.status === "completed" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => linkSipocMutation.mutate()}
+                        disabled={linkSipocMutation.isPending}
+                        data-testid="button-link-sipoc"
+                      >
+                        {linkSipocMutation.isPending ? (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        ) : (
+                          <Workflow className="h-3 w-3 mr-1" />
+                        )}
+                        Link Suppliers → Customers
+                      </Button>
+                    )}
+                    <CopyButton getText={() => formatSipoc(sessionSipoc)} label="SIPOC" />
+                  </div>
+                  <SipocBoard data={sessionSipoc} links={sessionSipoc.links} onRemoveItem={removeSipocItem} />
                 </div>
               </ScrollArea>
             </TabsContent>

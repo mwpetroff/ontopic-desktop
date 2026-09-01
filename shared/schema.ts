@@ -250,12 +250,27 @@ export interface SIPOCItem {
   evidence?: string;
 }
 
+// A single supplier→input→process→output→customer chain, or any partial subset of it.
+// Populated only by the post-session linking pass (linkSipocElements) once the full
+// transcript is available — never by the live per-chunk extraction, which has no way
+// to know whether a supplier named in one chunk relates to an output named in another.
+export interface SIPOCLink {
+  supplier?: string;
+  input?: string;
+  process?: string;
+  output?: string;
+  customer?: string;
+  evidence?: string;
+}
+
 export interface SIPOCData {
   suppliers: SIPOCItem[];
   inputs: SIPOCItem[];
   process: SIPOCItem[];
   outputs: SIPOCItem[];
   customers: SIPOCItem[];
+  links?: SIPOCLink[];
+  linkedAt?: string;
   lastUpdated: string;
 }
 

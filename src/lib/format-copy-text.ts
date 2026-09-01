@@ -1,5 +1,5 @@
 import type {
-  ActionItem, FollowUpQuestion, Requirement, PainPoint, SIPOCData, BANTData,
+  ActionItem, FollowUpQuestion, Requirement, PainPoint, SIPOCData, SIPOCLink, BANTData,
   MethodologyProgress, CompetitorMention, TimelineSignal, RiskFlag,
 } from "@shared/schema";
 
@@ -19,10 +19,36 @@ export function formatPainPoints(items: PainPoint[]): string {
   return items.map((p) => `- ${p.text}${p.impact ? `\n  Impact: ${p.impact}` : ""}`).join("\n");
 }
 
+// SIPOCData's category arrays are plural ("suppliers"); SIPOCLink's fields are singular
+// ("supplier") since a link is one row, not a bucket — "process" is the odd one out.
+const SIPOC_CATEGORY_TO_LINK_KEY = {
+  suppliers: "supplier", inputs: "input", process: "process", outputs: "output", customers: "customer",
+} as const satisfies Record<string, keyof SIPOCLink>;
+type SipocCategoryKey = keyof typeof SIPOC_CATEGORY_TO_LINK_KEY;
+
 export function formatSipoc(data: SIPOCData | null): string {
   if (!data) return "";
   const section = (label: string, items: { text: string }[]) =>
     `${label}:\n${items.length ? items.map((i) => `- ${i.text}`).join("\n") : "(none)"}`;
+
+  if (data.links && data.links.length > 0) {
+    const chains = data.links
+      .map((l) => [l.supplier, l.input, l.process, l.output, l.customer].filter(Boolean).join(" → "))
+      .join("\n");
+    const linkedTextByCategory: Partial<Record<SipocCategoryKey, Set<string>>> = {};
+    for (const key of Object.keys(SIPOC_CATEGORY_TO_LINK_KEY) as SipocCategoryKey[]) {
+      const linkKey = SIPOC_CATEGORY_TO_LINK_KEY[key];
+      linkedTextByCategory[key] = new Set(data.links.map((l) => l[linkKey]).filter(Boolean) as string[]);
+    }
+    const unlinked = (Object.keys(SIPOC_CATEGORY_TO_LINK_KEY) as SipocCategoryKey[])
+      .map((key) => section(
+        key.charAt(0).toUpperCase() + key.slice(1),
+        data[key].filter((item) => !linkedTextByCategory[key]!.has(item.text))
+      ))
+      .join("\n\n");
+    return `Confirmed Chains:\n${chains}\n\nNot Yet Linked:\n\n${unlinked}`;
+  }
+
   return [
     section("Suppliers", data.suppliers),
     section("Inputs", data.inputs),

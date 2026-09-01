@@ -48,9 +48,33 @@ export function buildBaTabsWorkbook(session: SessionForExport): ExcelJS.Workbook
 
   const sipoc = session.sipocData as SIPOCData | null;
   const sipocSheet = workbook.addWorksheet("SIPOC");
+  const hasLinks = !!sipoc?.links?.length;
+
   sipocSheet.addRow(SIPOC_COLUMNS.map((c) => c.label));
   styleHeaderRow(sipocSheet.getRow(1));
-  if (sipoc) {
+
+  if (sipoc && hasLinks) {
+    // Confirmed chains first — one row per link, exactly as traced from the full
+    // transcript by the post-session linking pass. Real row-to-row correspondence,
+    // not independent lists padded to the same length.
+    for (const link of sipoc.links!) {
+      sipocSheet.addRow(SIPOC_COLUMNS.map((c) => link[c.linkKey] || ""));
+    }
+    const linkedTextByCategory = new Map(
+      SIPOC_COLUMNS.map((c) => [c.key, new Set(sipoc.links!.map((l) => l[c.linkKey]).filter(Boolean) as string[])])
+    );
+    const unlinked = SIPOC_COLUMNS.map((c) => sipoc[c.key].filter((item) => !linkedTextByCategory.get(c.key)!.has(item.text)));
+    const anyUnlinked = unlinked.some((items) => items.length > 0);
+    if (anyUnlinked) {
+      sipocSheet.addRow([]);
+      const labelRow = sipocSheet.addRow(["Not Yet Linked"]);
+      labelRow.font = { italic: true, color: { argb: "FF888888" } };
+      const maxLen = Math.max(1, ...unlinked.map((items) => items.length));
+      for (let i = 0; i < maxLen; i++) {
+        sipocSheet.addRow(unlinked.map((items) => items[i]?.text || ""));
+      }
+    }
+  } else if (sipoc) {
     const maxLen = Math.max(1, ...SIPOC_COLUMNS.map((c) => sipoc[c.key].length));
     for (let i = 0; i < maxLen; i++) {
       sipocSheet.addRow(SIPOC_COLUMNS.map((c) => sipoc[c.key][i]?.text || ""));
