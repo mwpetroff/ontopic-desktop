@@ -195,6 +195,25 @@ MEDDIC's stage engine was already fully built and generic — this was a removal
 
 ---
 
+### BL-009 · Copy button on every result panel
+**Priority:** Medium | **Type:** UX | **Status:** ✅ Implemented
+
+Every panel that shows AI-derived or transcript text (Transcript, Show Notes, Action Items,
+Follow-Ups, Requirements, Pain Points, SIPOC, Key Terms, BANT, Methodology, Competitor
+Mentions, Timeline Signals, Risk Flags, Similar Projects) gets a small copy-to-clipboard icon
+button in its header, so the text can be grabbed for a doc/email/Slack message without manually
+selecting it.
+
+**Architecture**
+- New `src/components/copy-button.tsx` — takes a `getText: () => string` (lazy, so it always
+  copies current state rather than a stale snapshot) and renders an icon button that swaps to a
+  checkmark for ~1.5s on success, using `navigator.clipboard.writeText`.
+- Wired into panel headers in both `src/pages/dashboard.tsx` (live session) and
+  `src/pages/session-detail.tsx` (post-session review), each with a small formatter turning that
+  panel's structured data into plain text.
+
+---
+
 ## Completed
 
 | Item | Commit |

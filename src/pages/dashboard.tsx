@@ -23,6 +23,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
 import { SipocBoard } from "@/components/sipoc-board";
+import { CopyButton } from "@/components/copy-button";
+import {
+  formatActionItems, formatFollowUps, formatRequirements, formatPainPoints, formatSipoc,
+  formatBant, formatMethodology, formatCompetitorMentions, formatTimelineSignals,
+  formatRiskFlags, formatTopics, formatSimilarProjects,
+} from "@/lib/format-copy-text";
 import {
   Activity, Square, Mic, MicOff, Loader2, AlertCircle, BookOpen,
   Play, ClipboardList, HelpCircle, Building2,
@@ -656,6 +662,31 @@ export default function Dashboard() {
     const msPerWord = hasAudio
       ? (audioDuration * 1000) / (words.length * 1.12)
       : Math.max(60, 2200 / Math.max(1, words.length)); // pace to ~match GPT latency
+
+    // Cancel any word-stream loop still ticking from the previous chunk. Without audio
+    // to sync to, each chunk's words stream on a fixed-pace timer independent of how
+    // long its analysis call actually takes — if analysis resolves faster than the
+    // previous chunk's streaming pace (common for long chunks), the next chunk's loop
+    // would otherwise start while the old one is still running, and both would append
+    // competing/duplicate entries to the transcript. Snap the previous entry to its
+    // full text first so cancelling its timer early doesn't leave it truncated.
+    if (demoWordTimerRef.current) {
+      clearTimeout(demoWordTimerRef.current);
+      demoWordTimerRef.current = null;
+      const prevIdx = chunkIdx - 1;
+      if (prevIdx >= 0) {
+        const prevPrefix = `[${demoSpeakersRef.current[prevIdx]}] `;
+        const prevFull = prevPrefix + demoChunksRef.current[prevIdx];
+        setTranscript(prev => {
+          if (!prev) return prevFull;
+          const sep = "\n\n";
+          const lastSepIdx = prev.lastIndexOf(sep);
+          const lastEntry = lastSepIdx >= 0 ? prev.slice(lastSepIdx + sep.length) : prev;
+          if (!lastEntry.startsWith(prevPrefix)) return prev;
+          return prev.slice(0, lastSepIdx >= 0 ? lastSepIdx + sep.length : 0) + prevFull;
+        });
+      }
+    }
 
     {
       let streamIdx = 0;
@@ -1331,6 +1362,7 @@ export default function Dashboard() {
                     );
                   })}
                 </div>
+                <CopyButton getText={() => displayedTranscript} label="transcript" />
               </div>
               <ScrollArea className="flex-1">
                 <div className="p-4">
@@ -1370,6 +1402,7 @@ export default function Dashboard() {
                 <div className="px-3 py-2 flex items-center gap-2 bg-card/50">
                   <Target className="h-3.5 w-3.5 text-primary" />
                   <span className="text-xs font-semibold">BANT Qualification</span>
+                  <CopyButton getText={() => formatBant(bantData)} label="BANT" className="ml-auto" />
                   <div className="flex gap-0.5 flex-1 mx-2">
                     {BANT_KEYS.map(({ key }) => (
                       <div key={key} className={`h-1 flex-1 rounded-full transition-colors duration-500 ${bantData?.[key] ? "bg-emerald-500" : "bg-muted"}`} />
@@ -1404,6 +1437,7 @@ export default function Dashboard() {
                   {actionItems.length > 0 && (
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{actionItems.length}</Badge>
                   )}
+                  <CopyButton getText={() => formatActionItems(actionItems)} label="action items" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-1">
@@ -1429,6 +1463,7 @@ export default function Dashboard() {
                   {consolidatedProjects.length > 0 && (
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{consolidatedProjects.length}</Badge>
                   )}
+                  <CopyButton getText={() => formatSimilarProjects(consolidatedProjects)} label="similar projects" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-2">
@@ -1470,7 +1505,10 @@ export default function Dashboard() {
                   </TabsList>
                 </div>
 
-                <TabsContent value="salesqs" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="salesqs" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {followUpQuestions.length > 0 && (
+                    <CopyButton getText={() => formatFollowUps(followUpQuestions)} label="questions" className="absolute top-2 right-2 z-10" />
+                  )}
                   {followUpQuestions.length > 0 ? (
                     <FollowUpQuestionsPanel questions={followUpQuestions} />
                   ) : (
@@ -1491,6 +1529,7 @@ export default function Dashboard() {
                         <span className="text-[10px] text-muted-foreground tabular-nums" data-testid="text-methodology-progress">
                           {methodologyProgress.stages.filter(s => s.completed).length}/{methodologyProgress.stages.length}
                         </span>
+                        <CopyButton getText={() => formatMethodology(methodologyProgress)} label="methodology" />
                       </div>
                       {methodologyProgress.stages.map(stage => (
                         <div key={stage.id} className={`flex items-center gap-1.5 transition-all duration-300 ${stage.completed ? "opacity-100" : "opacity-40"}`} data-testid={`stage-${stage.id}`}>
@@ -1536,7 +1575,10 @@ export default function Dashboard() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="topics" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {topics.length > 0 && (
+                    <CopyButton getText={() => formatTopics(topics)} label="topics" className="absolute top-2 right-2 z-10" />
+                  )}
                   {topics.length > 0 ? (
                     <DashboardTopicGroups
                       toolTopics={toolTopics}
@@ -1595,6 +1637,7 @@ export default function Dashboard() {
                   );
                 })}
               </div>
+              <CopyButton getText={() => displayedTranscript} label="transcript" />
             </div>
             <ScrollArea className="flex-1">
               <div className="p-4">
@@ -1631,6 +1674,7 @@ export default function Dashboard() {
                     <ShieldAlert className="h-3.5 w-3.5 text-amber-500" />
                     <span className="text-xs font-semibold">Competitor / Incumbent Signals</span>
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-auto">{competitorMentions.length}</Badge>
+                    <CopyButton getText={() => formatCompetitorMentions(competitorMentions)} label="competitor signals" />
                   </div>
                   <div className="px-3 py-1.5 space-y-1">
                     {competitorMentions.slice(-4).map((m, i) => (
@@ -1647,6 +1691,7 @@ export default function Dashboard() {
                 <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
                   <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
                   <span className="text-xs font-semibold">Follow-Up Questions</span>
+                  <CopyButton getText={() => formatFollowUps(followUpQuestions)} label="follow-up questions" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="p-2">
@@ -1660,6 +1705,7 @@ export default function Dashboard() {
                   <AlertCircle className="h-3.5 w-3.5 text-primary" />
                   <span className="text-xs font-semibold">Detected Topics</span>
                   {topics.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{topics.length}</Badge>}
+                  <CopyButton getText={() => formatTopics(topics)} label="detected topics" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="p-2">
@@ -1677,7 +1723,10 @@ export default function Dashboard() {
                     <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="actions" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="actions" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {actionItems.length > 0 && (
+                    <CopyButton getText={() => formatActionItems(actionItems)} label="action items" className="absolute top-2 right-2 z-10" />
+                  )}
                   {actionItems.length > 0 ? <ActionItemsPanel items={actionItems} compact /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Action items will appear here.</p>}
                 </TabsContent>
                 <TabsContent value="projects" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 space-y-2 data-[state=inactive]:hidden">
@@ -1695,7 +1744,10 @@ export default function Dashboard() {
                     );
                   }) : <p className="text-xs text-muted-foreground/50 py-4 text-center">Projects surface as topics are detected.</p>}
                 </TabsContent>
-                <TabsContent value="methodology" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="methodology" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {methodologyProgress && (
+                    <CopyButton getText={() => formatMethodology(methodologyProgress)} label="methodology" className="absolute top-2 right-2 z-10" />
+                  )}
                   {methodologyProgress ? (
                     <div className="space-y-1">
                       {methodologyProgress.stages.map(stage => (
@@ -1743,6 +1795,7 @@ export default function Dashboard() {
                     <Layers className="h-3.5 w-3.5 text-primary" />
                     <span className="text-xs font-semibold">Tech Stack</span>
                     {topics.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{topics.filter(t => t.type === "tool").length} tools</Badge>}
+                    <CopyButton getText={() => formatTopics(topics)} label="tech stack" className="ml-auto" />
                   </div>
                   <ScrollArea className="flex-1">
                     <div className="px-3 py-2 space-y-2">
@@ -1770,6 +1823,7 @@ export default function Dashboard() {
                   <div className="px-3 py-2 flex items-center gap-2 bg-card/50 shrink-0">
                     <HelpCircle className="h-3.5 w-3.5 text-amber-500" />
                     <span className="text-xs font-semibold">Follow-Up Questions</span>
+                    <CopyButton getText={() => formatFollowUps(followUpQuestions)} label="follow-up questions" className="ml-auto" />
                   </div>
                   <ScrollArea className="flex-1">
                     <div className="p-2">
@@ -1786,10 +1840,16 @@ export default function Dashboard() {
                       <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
                     </TabsList>
                   </div>
-                  <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  <TabsContent value="topics" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                    {topics.length > 0 && (
+                      <CopyButton getText={() => formatTopics(topics)} label="topics" className="absolute top-2 right-2 z-10" />
+                    )}
                     {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}
                   </TabsContent>
-                  <TabsContent value="actions" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  <TabsContent value="actions" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                    {actionItems.length > 0 && (
+                      <CopyButton getText={() => formatActionItems(actionItems)} label="action items" className="absolute top-2 right-2 z-10" />
+                    )}
                     {actionItems.length > 0 ? <ActionItemsPanel items={actionItems} compact /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Action items will appear here.</p>}
                   </TabsContent>
                   <TabsContent value="projects" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 space-y-2 data-[state=inactive]:hidden">
@@ -1814,6 +1874,7 @@ export default function Dashboard() {
                   <ClipboardList className="h-3.5 w-3.5 text-primary" />
                   <span className="text-xs font-semibold">Action Items</span>
                   {actionItems.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{actionItems.length}</Badge>}
+                  <CopyButton getText={() => formatActionItems(actionItems)} label="action items" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-1">
@@ -1831,6 +1892,7 @@ export default function Dashboard() {
                   <CalendarClock className="h-3.5 w-3.5 text-blue-500" />
                   <span className="text-xs font-semibold">Timeline Signals</span>
                   {timelineSignals.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{timelineSignals.length}</Badge>}
+                  <CopyButton getText={() => formatTimelineSignals(timelineSignals)} label="timeline signals" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-1.5">
@@ -1848,6 +1910,7 @@ export default function Dashboard() {
                   <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
                   <span className="text-xs font-semibold">Risks & Dependencies</span>
                   {riskFlags.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{riskFlags.length}</Badge>}
+                  <CopyButton getText={() => formatRiskFlags(riskFlags)} label="risks & dependencies" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-1">
@@ -1869,10 +1932,16 @@ export default function Dashboard() {
                     <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="followups" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="followups" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {followUpQuestions.length > 0 && (
+                    <CopyButton getText={() => formatFollowUps(followUpQuestions)} label="questions" className="absolute top-2 right-2 z-10" />
+                  )}
                   {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Questions surface as the call progresses.</p>}
                 </TabsContent>
-                <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="topics" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {topics.length > 0 && (
+                    <CopyButton getText={() => formatTopics(topics)} label="topics" className="absolute top-2 right-2 z-10" />
+                  )}
                   {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}
                 </TabsContent>
                 <TabsContent value="projects" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 space-y-2 data-[state=inactive]:hidden">
@@ -1896,6 +1965,7 @@ export default function Dashboard() {
                   <ListChecks className="h-3.5 w-3.5 text-primary" />
                   <span className="text-xs font-semibold">Requirements</span>
                   {requirements.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{requirements.length}</Badge>}
+                  <CopyButton getText={() => formatRequirements(requirements)} label="requirements" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-1">
@@ -1913,6 +1983,7 @@ export default function Dashboard() {
                   <Siren className="h-3.5 w-3.5 text-red-500" />
                   <span className="text-xs font-semibold">Pain Points</span>
                   {painPoints.length > 0 && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{painPoints.length}</Badge>}
+                  <CopyButton getText={() => formatPainPoints(painPoints)} label="pain points" className="ml-auto" />
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="px-3 py-1.5 space-y-1.5">
@@ -1955,16 +2026,28 @@ export default function Dashboard() {
                     <TabsTrigger value="sentiment" className="text-[10px] px-0 h-6">Sentiment</TabsTrigger>
                   </TabsList>
                 </div>
-                <TabsContent value="followups" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="followups" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {followUpQuestions.length > 0 && (
+                    <CopyButton getText={() => formatFollowUps(followUpQuestions)} label="questions" className="absolute top-2 right-2 z-10" />
+                  )}
                   {followUpQuestions.length > 0 ? <FollowUpQuestionsPanel questions={followUpQuestions} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Questions surface as the call progresses.</p>}
                 </TabsContent>
-                <TabsContent value="sipoc" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="sipoc" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {sipocData && (
+                    <CopyButton getText={() => formatSipoc(sipocData)} label="SIPOC" className="absolute top-2 right-2 z-10" />
+                  )}
                   <SipocBoard data={sipocData} compact />
                 </TabsContent>
-                <TabsContent value="topics" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="topics" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {topics.length > 0 && (
+                    <CopyButton getText={() => formatTopics(topics)} label="topics" className="absolute top-2 right-2 z-10" />
+                  )}
                   {topics.length > 0 ? <DashboardTopicGroups toolTopics={toolTopics} conceptTopics={conceptTopics} industryTopics={industryTopics} newTopicIds={newTopicIds} sessionId={activeSession?.id} /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">IT terms appear here as detected.</p>}
                 </TabsContent>
-                <TabsContent value="actions" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                <TabsContent value="actions" className="relative flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">
+                  {actionItems.length > 0 && (
+                    <CopyButton getText={() => formatActionItems(actionItems)} label="action items" className="absolute top-2 right-2 z-10" />
+                  )}
                   {actionItems.length > 0 ? <ActionItemsPanel items={actionItems} compact /> : <p className="text-xs text-muted-foreground/50 py-4 text-center">Action items will appear here.</p>}
                 </TabsContent>
                 <TabsContent value="sentiment" className="flex-1 min-h-0 overflow-y-auto mt-0 p-2 data-[state=inactive]:hidden">

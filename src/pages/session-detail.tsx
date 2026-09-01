@@ -15,6 +15,8 @@ import { SentimentEqualizerFull } from "@/components/sentiment-equalizer";
 import { ActionItemsPanel } from "@/components/action-items-panel";
 import { FollowUpQuestionsPanel } from "@/components/follow-up-questions-panel";
 import { SipocBoard, SIPOC_COLUMNS } from "@/components/sipoc-board";
+import { CopyButton } from "@/components/copy-button";
+import { formatActionItems, formatFollowUps, formatSipoc, formatTopics, formatSimilarProjects } from "@/lib/format-copy-text";
 import { ArrowLeft, Clock, Tag, BookOpen, FileText, ClipboardList, HelpCircle, Building2, Sparkles, Loader2, Wrench, Lightbulb, Factory, Download, Users, FolderOpen, BarChart3, Mic, ChevronDown, Network, Briefcase, DollarSign, UserCheck, Target, CheckCircle2, CloudUpload, FileJson, Pencil, Check, X, Workflow, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -368,26 +370,29 @@ export default function SessionDetail() {
                       <Sparkles className="h-4 w-4 text-primary" />
                       <h3 className="text-sm font-semibold" data-testid="text-key-takeaway-heading">Key Takeaway</h3>
                     </div>
-                    {session.summary && session.transcript && session.transcript.length > 50 && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs"
-                        onClick={() => {
-                          autoGenerateTriggered.current = true;
-                          generateSummaryMutation.mutate();
-                        }}
-                        disabled={generateSummaryMutation.isPending}
-                        data-testid="button-regenerate-summary"
-                      >
-                        {generateSummaryMutation.isPending ? (
-                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                        ) : (
-                          <Sparkles className="h-3 w-3 mr-1" />
-                        )}
-                        Regenerate
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {session.summary && <CopyButton getText={() => session.summary || ""} label="summary" />}
+                      {session.summary && session.transcript && session.transcript.length > 50 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            autoGenerateTriggered.current = true;
+                            generateSummaryMutation.mutate();
+                          }}
+                          disabled={generateSummaryMutation.isPending}
+                          data-testid="button-regenerate-summary"
+                        >
+                          {generateSummaryMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <Sparkles className="h-3 w-3 mr-1" />
+                          )}
+                          Regenerate
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <Card className="p-4">
                     {session.summary ? (
@@ -491,6 +496,9 @@ export default function SessionDetail() {
           <TabsContent value="transcript" className="flex-1 overflow-hidden mt-0">
             <ScrollArea className="h-full">
               <div className="p-4">
+                {session.transcript && (
+                  <div className="flex justify-end mb-2"><CopyButton getText={() => session.transcript} label="transcript" /></div>
+                )}
                 {session.transcript ? (
                   <HighlightedTranscript text={session.transcript} topics={session.topics} sessionStart={session.createdAt instanceof Date ? session.createdAt.toISOString() : session.createdAt} sessionEnd={session.endedAt instanceof Date ? session.endedAt.toISOString() : session.endedAt} />
                 ) : (
@@ -606,6 +614,9 @@ export default function SessionDetail() {
           <TabsContent value="key-terms" className="flex-1 overflow-hidden mt-0">
             <ScrollArea className="h-full">
               <div className="p-4">
+                {session.topics.length > 0 && (
+                  <div className="flex justify-end mb-2"><CopyButton getText={() => formatTopics(session.topics)} label="key terms" /></div>
+                )}
                 {session.topics.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <Tag className="h-6 w-6 text-muted-foreground/20 mb-2" />
@@ -637,6 +648,7 @@ export default function SessionDetail() {
             <TabsContent value="action-items" className="flex-1 overflow-hidden mt-0">
               <ScrollArea className="h-full">
                 <div className="p-4">
+                  <div className="flex justify-end mb-2"><CopyButton getText={() => formatActionItems(sessionActionItems)} label="action items" /></div>
                   <ActionItemsPanel items={sessionActionItems} />
                 </div>
               </ScrollArea>
@@ -647,6 +659,7 @@ export default function SessionDetail() {
             <TabsContent value="follow-ups" className="flex-1 overflow-hidden mt-0">
               <ScrollArea className="h-full">
                 <div className="p-4">
+                  <div className="flex justify-end mb-2"><CopyButton getText={() => formatFollowUps(sessionFollowUps)} label="follow-up questions" /></div>
                   <FollowUpQuestionsPanel questions={sessionFollowUps} />
                 </div>
               </ScrollArea>
@@ -657,6 +670,7 @@ export default function SessionDetail() {
             <TabsContent value="similar-projects" className="flex-1 overflow-hidden mt-0">
               <ScrollArea className="h-full">
                 <div className="p-4 space-y-2">
+                  <div className="flex justify-end"><CopyButton getText={() => formatSimilarProjects(sessionSimilarProjects)} label="similar projects" /></div>
                   {sessionSimilarProjects.map((match, i) => (
                     <Card key={match.projectId || i} className="p-3" data-testid={`card-similar-project-${match.projectId}`}>
                       <div className="flex items-start justify-between gap-2">
@@ -690,6 +704,7 @@ export default function SessionDetail() {
             <TabsContent value="sipoc" className="flex-1 overflow-hidden mt-0">
               <ScrollArea className="h-full">
                 <div className="p-4">
+                  <div className="flex justify-end mb-2"><CopyButton getText={() => formatSipoc(sessionSipoc)} label="SIPOC" /></div>
                   <SipocBoard data={sessionSipoc} onRemoveItem={removeSipocItem} />
                 </div>
               </ScrollArea>
