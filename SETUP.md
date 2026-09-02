@@ -151,8 +151,7 @@ If neither is available, mic-only capture still works. The app will show a **"Sp
 
 ## Linux-Specific: Speaker Capture (PulseAudio / PipeWire)
 
-> **Note:** Linux speaker capture is not yet implemented (stub only). These instructions
-> apply once Phase 5 is complete.
+Implemented via `parec` against the detected PulseAudio/PipeWire monitor source (A-03).
 
 PulseAudio monitor sources are automatically available — no setup needed on most desktop distros.
 PipeWire (Fedora 34+, Ubuntu 22.04+) is also supported via the PulseAudio compatibility layer.

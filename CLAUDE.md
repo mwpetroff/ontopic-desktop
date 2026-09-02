@@ -78,6 +78,41 @@ the whole process tree (already handled in `electron/main.js` `before-quit`).
 
 ---
 
+## Client-side Vite HMR is not reliable enough to trust for verification
+
+Editing a plain `.ts` utility module (no React component export — e.g. `src/lib/*.ts`) in a
+long-running dev session sometimes does **not** propagate via hot-reload the way editing a
+`.tsx` page component does. React Fast Refresh needs an "accept boundary" (a component) to
+re-render from; a lib module with no such boundary can get silently skipped or only partially
+applied, especially after many hot-reloads have already happened in the same session.
+
+Confirmed symptom: a demo script's dialogue text was edited and the dev server logged a normal
+`hmr update` line, but the already-open window kept running the *old* text for a while after —
+confirmed by checking what the Vite dev server itself was serving (`curl localhost:5173/src/...`
+showed the new content) versus what the running app actually used (still old). The fix that
+actually worked was a full restart (kill the Electron + node process tree, relaunch `npm run
+dev`), not another edit-and-wait cycle.
+
+Rule of thumb: after editing a non-component `.ts` file, don't assume the change is live just
+because an `hmr update` log line appeared — if you need to be *certain* (verifying a fix, not
+just iterating), do a full restart rather than trusting HMR.
+
+---
+
+## jsPDF's `doc.save()` writes a real file when there's no browser to download to
+
+Under Node/jsdom (e.g. a vitest test), `jsPDF`'s `save()` falls back to writing the PDF to disk
+via `fs` at whatever relative path you passed, since there's no real `<a download>` mechanism to
+hand it to. A naive test that calls `exportSessionPdf(...)` will litter the repo root with a
+generated `.pdf` file on every run. `save()` is assigned per-instance inside jsPDF's constructor,
+not on `jsPDF.prototype`, so `vi.spyOn(jsPDF.prototype, "save")` silently fails to mock it (spy
+just isn't found, no error, no effect) — subclassing via `vi.mock("jspdf", ...)` didn't reliably
+take effect either. The pattern that works: compute the expected filename with the same
+`buildExportFilename()` the export code uses, and delete it in an `afterAll` (same shape as
+`tests/setup.ts`'s temp-SQLite-file cleanup).
+
+---
+
 ## Run tests after any `npm install`
 
 `naudiodon` and its dependency `segfault-handler` must be rebuilt for Electron.

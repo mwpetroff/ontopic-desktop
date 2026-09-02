@@ -9,8 +9,8 @@
 | OS | Status | Speaker Capture Method |
 |---|---|---|
 | **Windows 10 / 11** | ✅ Fully supported | Stereo Mix, VB-Audio Cable, VoiceMeeter, or any "loopback" device |
-| **macOS** | 🔜 Planned (Phase 4) | BlackHole virtual audio driver |
-| **Linux** | 🔜 Planned (Phase 5) | PulseAudio monitor source |
+| **macOS** | 🔜 Planned (Phase 4) — deferred, needs a Mac build environment | BlackHole virtual audio driver |
+| **Linux** | ✅ Implemented | `parec` against the detected PulseAudio/PipeWire monitor source |
 
 ## What's Different from the Web App
 
@@ -75,7 +75,7 @@ OPENAI_API_KEY=sk-...
 ## Testing
 
 ```bash
-npm test           # Run full test suite (vitest, 319 tests)
+npm test           # Run full test suite (vitest, 358 tests)
 npm run test:watch # Watch mode
 ```
 
@@ -83,17 +83,28 @@ Tests use an isolated temporary SQLite database and never touch the production d
 
 | Test file | What it covers |
 |---|---|
-| `analysis-helpers.test.ts` | Speaker resolution, sentiment aggregation, BANT merge, methodology stages, `persistSessionUpdates` DB writes, `dedupeByText` |
-| `constants.test.ts` | `featuresForRole` for all 5 roles, salesMethodology flag toggling |
+| `analysis-helpers.test.ts` | Speaker resolution, sentiment aggregation, BANT merge, methodology stages, `applySipocUpdates`, `persistSessionUpdates` DB writes, `dedupeByText` |
+| `constants.test.ts` | `featuresForRole` for all 5 roles, salesMethodology flag toggling, stale-methodology regression guard |
 | `analytics.test.ts` | Competency match scoring, topic similarity detection |
 | `schema.test.ts` | Drizzle-Zod insert schemas, field stripping, JSON array columns |
-| `storage.test.ts` | Full CRUD lifecycle for all entities against real SQLite |
+| `storage.test.ts` | Full CRUD lifecycle for all entities against real SQLite, settings defaults |
 | `transcript.test.ts` | Block parsing, timestamp formatting, speaker accumulation |
 | `validation.test.ts` | Zod validation schemas for API request bodies |
 | `audio-mixer.test.ts` | PCM buffering, chunk sizing, label isolation, stop/flush |
 | `mic-capture.test.ts` | MicCapture lifecycle, mock portAudio, event emitters |
 | `speaker-capture-win.test.ts` | Windows loopback — WASAPI output strategy, named device lookup (Stereo Mix, VB-Cable, VoiceMeeter), error handling |
 | `auth-stub.test.ts` | Auth endpoints (login, logout, /api/auth/user) |
+| `auth-utils.test.ts` | `isUnauthorizedError` classification |
+| `date.test.ts` | `formatDate`/`formatDuration` display helpers |
+| `queryClient.test.ts` | TanStack Query retry/retryDelay policy (502/503/504 startup races) |
+| `speaker-colors.test.ts` | Deterministic speaker → color assignment |
+| `speaker-match.test.ts` | Voice-profile speaker matching |
+| `use-audio-capture.browser.test.ts` | `useAudioCapture` web (non-Electron) fallback path |
+| `format-copy-text.test.ts` | Plain-text formatters behind every panel's copy button |
+| `sipoc-rows.test.ts` | Shared SIPOC linked/unlinked row computation (PDF + Excel exports) |
+| `export-excel.test.ts` | `buildSessionWorkbook` — sheet presence/absence per role, tab colors, SIPOC linked/unlinked rendering |
+| `export-pdf.browser.test.ts` | `exportSessionPdf` smoke test — every section populated, and none populated, without throwing |
+| `export-filename.test.ts` | `client_title_date` filename slug shared by PDF/JSON/Excel exports |
 
 > **After any `npm install`:** Run `npm test` to verify `better-sqlite3` wasn't accidentally rebuilt for Electron. If tests fail with a MODULE_VERSION error, run `npm rebuild better-sqlite3`.
 
@@ -114,8 +125,8 @@ npm run build:linux  # Linux AppImage
 - [x] API key stored in OS keychain via Electron safeStorage
 - [x] Single-instance lock + port conflict recovery
 - [x] Role-specific 50/50 layouts (SA/SE/PM/BA/AE) + low-audio warning
-- [ ] Phase 4: BlackHole + CoreAudio — macOS
-- [ ] Phase 5: PulseAudio monitor — Linux
+- [ ] Phase 4: BlackHole + CoreAudio — macOS (deferred, needs a Mac build environment)
+- [x] Phase 5: PulseAudio monitor — Linux (via `parec`)
 - [ ] Phase 6: Local Whisper (audio stays on-device)
 - [ ] Phase 7: Code signing + auto-update + distribution
 
@@ -128,7 +139,7 @@ npm run build:linux  # Linux AppImage
 | `electron/audio/mic-capture.js` | naudiodon — selected or default input device capture at 16 kHz |
 | `electron/audio/speaker-capture-win.js` | Windows loopback via naudiodon: Stereo Mix, VB-Cable, VoiceMeeter, or any device containing "loopback" |
 | `electron/audio/speaker-capture-mac.js` | macOS stub (BlackHole — Phase 4) |
-| `electron/audio/speaker-capture-linux.js` | Linux stub (PulseAudio monitor — Phase 5) |
+| `electron/audio/speaker-capture-linux.js` | Linux — `parec` against the detected PulseAudio/PipeWire monitor source |
 | `electron/audio/audio-mixer.js` | Buffers PCM, labels chunks "mic"/"speaker", fires onChunk every 5 s |
 | `server/index.ts` | Express server entry — auth, routes, SQLite startup |
 | `server/auth.ts` | Always-true auth stub (login/logout/me routes + isAuthenticated middleware) |

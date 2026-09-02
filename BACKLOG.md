@@ -154,9 +154,11 @@ Structured BA framework, additive alongside `requirements`/`painPoints`. AI-draf
 **UI**
 - Session-detail: new "SIPOC" tab (correspondent-only, shown once any category has data), five-card grid, each item removable via a hover ✕ — backed by the generic session PATCH endpoint. Full inline text-editing (vs. delete-only) is a reasonable fast-follow if the delete-only scaffold proves insufficient in practice.
 - Live dashboard: "SIPOC" tab added to the BA role's bottom tab group (Questions/SIPOC/Topics/Actions/Sentiment), read-only accumulation matching how Requirements/Pain Points already behave live.
+- **Superseded by BL-010:** the board described here (flat five-card grid) was later redesigned into a colored header band with connecting arrows, then a "Confirmed Chains" linked-row layout — see BL-010 for the current shape of `SipocBoard`.
 
 **Demo**
-- Correction from the original sketch: the BA (correspondent) role has its own dedicated demo — `BA_DEMO_CHUNKS` in `src/pages/dashboard.tsx`, "Procurement Requirements Workshop" (Rachel Torres et al. at Northgate Group) — not the generic "Cloud Migration Review" script, which is actually the **engineer** role's demo. The procurement script already reads like a rough SIPOC (suppliers being onboarded, invoices/POs as inputs, approval workflows as process, audit trails as outputs, procurement leadership as customers), so no new recordings were added — validate coverage after a manual demo run and only add lines for a category that stays empty.
+- Correction from the original sketch: the BA (correspondent) role has its own dedicated demo — `BA_DEMO_CHUNKS` in `src/pages/dashboard.tsx`, "Procurement Requirements Workshop" (Rachel Torres et al. at Northgate Group) — not the generic "Cloud Migration Review" script, which is actually the **engineer** role's demo.
+- **Follow-up — done:** a manual demo run showed Suppliers/Inputs staying thin (1-2 items) while Process/Outputs/Customers accumulated 4-8 — exactly the imbalance the initial "validate after a run" note was watching for. Fixed by naming specific suppliers (Acme Manufacturing, Beacon Logistics, Meridian Office Supplies, Cascade Industrial Supply) and distinct input document types (invoices, purchase requisitions, signed contracts, W-9 forms, banking details, insurance certificates) in Pat Singh's two chunks, instead of the generic "supplier invoices" phrasing. No audio exists for this demo (BA has none recorded, unlike AE), so this was a same-index text edit with no downstream file renumbering to worry about. Verified via the real API: 4 suppliers, 6 inputs after both chunks.
 
 **Docs / Tests**
 - `tests/constants.test.ts`: correspondent → `sipoc: true`; `sipoc: false/undefined` asserted for every other role.
@@ -186,7 +188,7 @@ MEDDIC's stage engine was already fully built and generic — this was a removal
 
 **Demo**
 - `AE_DEMO_CHUNKS` updated in both `src/pages/dashboard.tsx` and `scripts/generate-demo-audio.mjs` (kept in sync, as they were before). Edited chunks 5, 6, and 11 **in place** — same 12-chunk array, same speakers/indices — rather than inserting new chunks, specifically to avoid shifting every downstream `ae-demo-N.mp3` filename. Added: an explicit ask-and-answer for quantified success metrics (audit prep time, uptime target) covering **Metrics**, and a line where Jennifer commits to championing the deal through her own steering committee, covering **Champion**.
-- **Follow-up required, not done here:** `public/demo-audio/ae-demo-5.mp3`, `ae-demo-6.mp3`, and `ae-demo-11.mp3` already exist on disk and now say the old dialogue while the transcript streams the new text. Regenerating them requires running `npm run generate-demo-audio` with a real `OPENAI_API_KEY` (a paid TTS call) — not run as part of this change; delete those three files and re-run the script when ready.
+- **Follow-up — done:** `public/demo-audio/ae-demo-5.mp3`, `ae-demo-6.mp3`, and `ae-demo-11.mp3` were regenerated against the new dialogue via `npm run generate-demo-audio` (a paid TTS call, run only after explicit confirmation). Confirmed via fresh file timestamps/sizes.
 
 **Docs / Tests**
 - `tests/constants.test.ts`: swapped example literal to `"meddic"`; added a regression test asserting `METHODOLOGY_STAGES.sandler` is gone and that a stale `"sandler"` value now disables `methodologyTracking`.
@@ -252,6 +254,21 @@ fire-once-at-session-end shape rather than inventing a new pattern.
 - `formatSipoc()` and the Excel "SIPOC" sheet both render linked rows first (one row per
   confirmed chain) when available, then a "Not Yet Linked" section for anything left over —
   otherwise fall back to the original independent-columns-padded-to-max-length format.
+
+**Follow-up — visual clarity (done):** the first version of "Confirmed Chains" gave no visual
+sense that a row's 5 cells belonged together (thin gridlines only). Redesigned with a numbered
+badge per row, alternating row shading, a hover highlight across the full row, and connecting
+chevrons that only render between two adjacent *filled* cells (a gap in the chain shows a faint
+dot instead) — so the flow reads left-to-right only where the data actually continues.
+
+**Follow-up — "customer" role misclassification (done):** a demo chunk mentioning both a general
+onboarding document requirement and a specific supplier lost to slow onboarding got linked with
+the lost supplier (Cascade Industrial Supply) labeled as the "customer" of the document-collection
+process — confusing, since a lost/prospective supplier isn't a customer of anything.
+`linkSipocElements`'s prompt now explicitly checks whether an entity is already playing a
+supplier role (current or lost/prospective) before allowing it to be labeled "customer," and
+leaves the field out rather than assigning a contradictory dual role. Verified against the real
+API with the exact chunk that produced the confusing result before.
 
 **Deliberately deferred:** generalizing this same "live per-chunk extraction + one full-context
 wrap-up refinement pass" pattern to other roles' structured data — BANT reconciliation across
@@ -325,6 +342,27 @@ cases) and `tests/export-pdf.browser.test.ts` (jsdom-based smoke test confirming
 run through every section, fully populated and fully empty, without throwing — deep pixel/layout
 verification isn't practical for a generated PDF, so this checks "doesn't crash," not "looks
 right").
+
+---
+
+### BL-012 · Consistent `client_title_date` export filenames
+**Priority:** Low | **Type:** UX | **Status:** ✅ Implemented
+
+All three export formats used only a slugified title (e.g. `procurement-requirements-
+workshop.pdf`), making it hard to tell sessions apart in a downloads folder full of exports
+from different clients/dates, and the PDF export additionally had its own unique `-notes` suffix.
+
+**Architecture**
+- New `src/lib/export-filename.ts`: `buildExportFilename()` produces `{client}_{title}_{date}`
+  (client segment omitted when the session has none), date as `YYYY-MM-DD` so files sort
+  chronologically. All three export functions (`exportSessionPdf`, `exportSessionJson`,
+  `exportSessionExcel`) share this one implementation instead of each having their own inline
+  slug logic, and now produce the exact same base filename — a session's PDF/JSON/Excel exports
+  sit together in a folder, distinguished only by extension.
+
+**Docs / Tests**
+- `tests/export-filename.test.ts` (4 cases): client/title/date joining, missing-client handling,
+  punctuation/whitespace slugification, `Date` object vs. string `createdAt`.
 
 ---
 
