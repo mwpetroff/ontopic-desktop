@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { getSpeakerColorByIndex } from "@/lib/speaker-colors";
 import { exportSessionPdf, exportSessionJson } from "@/lib/export-pdf";
-import { exportBaTabsExcel } from "@/lib/export-excel";
+import { exportSessionExcel } from "@/lib/export-excel";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSession } from "@/hooks/use-sessions";
@@ -209,9 +209,6 @@ export default function SessionDetail() {
   const hasSentiment = sentimentData.length > 0;
   const sessionSipoc = (session.sipocData || null) as SIPOCData | null;
   const hasSipoc = !!sessionSipoc && SIPOC_COLUMNS.some(c => sessionSipoc[c.key].length > 0);
-  const hasRequirements = ((session.requirements as { text: string }[] | null) || []).length > 0;
-  const hasPainPoints = ((session.painPoints as { text: string }[] | null) || []).length > 0;
-  const hasBaTabs = hasRequirements || hasPainPoints || hasSipoc;
 
   return (
     <div className="flex flex-col h-full">
@@ -254,21 +251,19 @@ export default function SessionDetail() {
                     <FileJson className="h-3.5 w-3.5 mr-2" />
                     Export JSON
                   </DropdownMenuItem>
-                  {hasBaTabs && (
-                    <DropdownMenuItem
-                      onClick={async () => {
-                        try {
-                          await exportBaTabsExcel(session);
-                        } catch (err) {
-                          toast({ title: "Excel export failed", variant: "destructive" });
-                        }
-                      }}
-                      data-testid="button-export-excel"
-                    >
-                      <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
-                      Export BA Tabs (Excel)
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await exportSessionExcel(session);
+                      } catch (err) {
+                        toast({ title: "Excel export failed", variant: "destructive" });
+                      }
+                    }}
+                    data-testid="button-export-excel"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
+                    Export All (Excel)
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

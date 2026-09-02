@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import type { Session, Topic, SpeakerEntry, ActionItem, FollowUpQuestion } from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
 import { formatDateForPdf, formatDurationForPdf } from "@/lib/date";
+import { parseAndMergeBlocks, formatElapsedTimestamp } from "@/lib/transcript";
 
 type SessionWithTopics = Session & { topics: Topic[] };
 
@@ -250,40 +251,10 @@ export function exportSessionPdf(session: SessionWithTopics) {
     doc.text("Full Transcript", margin, y);
     y += 7;
 
-    const speakerBlockRegex = /\[([^\]]+)\]\s*/g;
-    const rawBlocks: Array<{ speaker: string; text: string }> = [];
-    const parts = session.transcript.split(speakerBlockRegex);
-
-    if (parts.length > 1) {
-      if (parts[0].trim()) {
-        rawBlocks.push({ speaker: "", text: parts[0].trim() });
-      }
-      for (let i = 1; i < parts.length; i += 2) {
-        const speaker = parts[i] || "";
-        const text = (parts[i + 1] || "").trim();
-        if (text) {
-          rawBlocks.push({ speaker, text });
-        }
-      }
-    } else {
-      rawBlocks.push({ speaker: "", text: session.transcript });
-    }
-
-    const totalRawBlocks = rawBlocks.length;
-    const mergedBlocks: Array<{ speaker: string; text: string; firstRawIndex: number }> = [];
-    for (let i = 0; i < rawBlocks.length; i++) {
-      const block = rawBlocks[i];
-      const last = mergedBlocks[mergedBlocks.length - 1];
-      if (last && last.speaker === block.speaker) {
-        last.text += " " + block.text;
-      } else {
-        mergedBlocks.push({ speaker: block.speaker, text: block.text, firstRawIndex: i });
-      }
-    }
-
-    const sessionStart = new Date(session.createdAt).getTime();
-    const sessionEnd = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();
-    const sessionDuration = sessionEnd - sessionStart;
+    const mergedBlocks = parseAndMergeBlocks(session.transcript);
+    const sessionStartMs = new Date(session.createdAt).getTime();
+    const sessionEndMs = session.endedAt ? new Date(session.endedAt).getTime() : Date.now();
+    const sessionDurationMs = sessionEndMs - sessionStartMs;
 
     const lineHeight = 4.5;
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -292,11 +263,7 @@ export function exportSessionPdf(session: SessionWithTopics) {
       const block = mergedBlocks[blockIdx];
 
       if (block.speaker) {
-        const elapsedMs = (block.firstRawIndex / Math.max(totalRawBlocks, 1)) * sessionDuration;
-        const totalSeconds = Math.floor(elapsedMs / 1000);
-        const mm = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
-        const ss = (totalSeconds % 60).toString().padStart(2, "0");
-        const timestamp = `${mm}:${ss}`;
+        const timestamp = formatElapsedTimestamp(block.rawBlockIndex, block.rawBlockCount, sessionStartMs, sessionDurationMs);
 
         if (blockIdx > 0) {
           y += 4;
@@ -314,7 +281,7 @@ export function exportSessionPdf(session: SessionWithTopics) {
 
         doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
-        const textLines = doc.splitTextToSize(block.text, contentWidth);
+        const textLines = doc.splitTextToSize(block.content, contentWidth);
         for (let i = 0; i < textLines.length; i++) {
           if (y + lineHeight > pageHeight - margin) {
             doc.addPage();
@@ -326,7 +293,7 @@ export function exportSessionPdf(session: SessionWithTopics) {
       } else {
         doc.setFontSize(9);
         doc.setFont("helvetica", "normal");
-        const textLines = doc.splitTextToSize(block.text, contentWidth);
+        const textLines = doc.splitTextToSize(block.content, contentWidth);
         for (let i = 0; i < textLines.length; i++) {
           if (y + lineHeight > pageHeight - margin) {
             doc.addPage();

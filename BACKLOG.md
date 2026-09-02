@@ -269,6 +269,49 @@ is a much larger sweep better scoped as its own follow-on once this lands and ho
 
 ---
 
+### BL-011 · Comprehensive, formatted Excel session export
+**Priority:** Medium | **Type:** UX | **Status:** ✅ Implemented
+
+The original Excel export (built alongside BL-007) only covered the three BA-specific
+sections (Requirements, Pain Points, SIPOC) with plain unstyled rows. Rebuilt as a full
+session export applicable to every role — one real Excel Table per section, color-coded
+sheet tabs, and a cover sheet — rather than a BA-only feature.
+
+**Sheets** (only included when that section has data, except the always-present core ones):
+Overview (title/client/industry/date/duration/summary — a cover page, not a data table),
+Transcript, Key Terms, Action Items, Follow-Ups, Similar Projects always appear; Requirements,
+Pain Points, SIPOC, BANT, Methodology, Competitor Mentions, Timeline Signals, and Risk Flags
+appear only when the session actually has that data — so an AE session doesn't get seven empty
+BA/PM/SA tabs and vice versa.
+
+**Architecture**
+- `src/lib/export-excel.ts`: `exportSessionExcel()` (renamed from `exportBaTabsExcel`) and
+  `buildSessionWorkbook()` (renamed from `buildBaTabsWorkbook`). Each non-SIPOC sheet goes
+  through a shared `addTableSheet()` helper that renders a real Excel Table (`worksheet.addTable`,
+  banded rows, filter buttons — not just styled cells) with a distinct ARGB tab color per
+  section; an empty section still gets its sheet with headers and a "No data captured in this
+  section" note rather than being blank and confusing. SIPOC keeps its own custom per-column
+  coloring (to preserve the S/I/P/O/C visual identity) rather than using the generic table helper.
+- Extracted **`src/lib/transcript.ts`**'s existing `parseAndMergeBlocks`/`formatElapsedTimestamp`
+  (already used by the live `HighlightedTranscript` component) into both the PDF and Excel
+  export's transcript rendering — previously `export-pdf.ts` had its own separate inline copy of
+  near-identical block-parsing logic; now there's one shared, tested implementation instead of
+  two independent ones silently drifting apart.
+- `src/pages/session-detail.tsx`: menu item renamed "Export BA Tabs (Excel)" → "Export All
+  (Excel)"; the `hasBaTabs` visibility gate was removed since the export is now useful
+  regardless of role (matches how PDF/JSON exports have no gating either).
+
+**Docs / Tests**
+- `tests/export-excel.test.ts` rewritten against `buildSessionWorkbook`: always-present vs.
+  conditional sheet presence, Overview content, distinct tab colors, the "no data" placeholder,
+  transcript block-splitting, and the SIPOC linked/unlinked cases carried over from BL-010.
+- Verified the generated `.xlsx` structure (Table + tab color) survives a real write/read
+  round-trip through ExcelJS; actual visual polish in Excel/LibreOffice itself needs a human
+  to eyeball, since the export only runs in a browser context (`document.createElement`) that
+  can't be driven from a server-side check the way the AI features were.
+
+---
+
 ## Completed
 
 | Item | Commit |
