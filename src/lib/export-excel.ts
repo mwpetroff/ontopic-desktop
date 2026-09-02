@@ -7,6 +7,7 @@ import { consolidateSimilarProjects } from "@shared/schema";
 import { SIPOC_COLUMNS } from "@/components/sipoc-board";
 import { formatDateForPdf, formatDurationForPdf } from "@/lib/date";
 import { parseAndMergeBlocks, formatElapsedTimestamp } from "@/lib/transcript";
+import { buildExportFilename } from "@/lib/export-filename";
 
 type SessionWithTopics = Session & { topics: Topic[] };
 
@@ -292,10 +293,9 @@ export async function exportSessionExcel(session: SessionWithTopics): Promise<vo
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
-  const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${slug}.xlsx`;
+  a.download = `${buildExportFilename(session)}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }

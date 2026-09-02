@@ -4,6 +4,7 @@ import type { Session, Topic, SpeakerEntry, ActionItem, FollowUpQuestion } from 
 import { consolidateSimilarProjects } from "@shared/schema";
 import { formatDateForPdf, formatDurationForPdf } from "@/lib/date";
 import { parseAndMergeBlocks, formatElapsedTimestamp } from "@/lib/transcript";
+import { buildExportFilename } from "@/lib/export-filename";
 
 type SessionWithTopics = Session & { topics: Topic[] };
 
@@ -306,17 +307,15 @@ export function exportSessionPdf(session: SessionWithTopics) {
     }
   }
 
-  const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  doc.save(`${slug}-notes.pdf`);
+  doc.save(`${buildExportFilename(session)}.pdf`);
 }
 
 export function exportSessionJson(session: SessionWithTopics) {
-  const slug = session.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const blob = new Blob([JSON.stringify(session, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${slug}.json`;
+  a.download = `${buildExportFilename(session)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
