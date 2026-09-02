@@ -310,6 +310,22 @@ BA/PM/SA tabs and vice versa.
   to eyeball, since the export only runs in a browser context (`document.createElement`) that
   can't be driven from a server-side check the way the AI features were.
 
+**Follow-up — PDF/JSON parity:** the PDF export was missing all 8 role-specific sections
+(Requirements, Pain Points, SIPOC, BANT, Methodology, Competitor Mentions, Timeline Signals,
+Risk Flags) that Excel now covers — it only ever had Key Takeaway/Host & Guests/Key Terms/
+Action Items/Follow-Ups/Similar Projects/Transcript. Added all 8 to `export-pdf.ts` via a new
+`renderTableSection()` helper (page-break-aware, silently skips when a section has no data —
+consistent with how the PDF's existing sections already behaved, unlike Excel's always-present
+placeholder sheets). JSON already needed no changes — `exportSessionJson` is a raw
+`JSON.stringify` of the full session, so every field was already present. SIPOC's linked/
+unlinked row computation was pulled into a new shared `src/lib/sipoc-rows.ts` (`computeSipocRows`)
+used by both the PDF and Excel exports instead of writing a third copy of that logic — `export-
+excel.ts`'s `addSipocSheet` was refactored to use it too. New `tests/sipoc-rows.test.ts` (4
+cases) and `tests/export-pdf.browser.test.ts` (jsdom-based smoke test confirming jsPDF/autoTable
+run through every section, fully populated and fully empty, without throwing — deep pixel/layout
+verification isn't practical for a generated PDF, so this checks "doesn't crash," not "looks
+right").
+
 ---
 
 ## Completed

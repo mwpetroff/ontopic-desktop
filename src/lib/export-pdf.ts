@@ -1,12 +1,43 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { Session, Topic, SpeakerEntry, ActionItem, FollowUpQuestion } from "@shared/schema";
+import type {
+  Session, Topic, SpeakerEntry, ActionItem, FollowUpQuestion, Requirement, PainPoint,
+  SIPOCData, BANTData, MethodologyProgress, CompetitorMention, TimelineSignal, RiskFlag,
+} from "@shared/schema";
 import { consolidateSimilarProjects } from "@shared/schema";
 import { formatDateForPdf, formatDurationForPdf } from "@/lib/date";
 import { parseAndMergeBlocks, formatElapsedTimestamp } from "@/lib/transcript";
 import { buildExportFilename } from "@/lib/export-filename";
+import { computeSipocRows } from "@/lib/sipoc-rows";
 
 type SessionWithTopics = Session & { topics: Topic[] };
+
+/** Renders one titled table section (page-break-aware) and returns the y position to
+ * continue from. `widthFractions` are fractions of contentWidth, so callers don't need
+ * to hand-compute mm widths per column. */
+function renderTableSection(
+  doc: jsPDF, y: number, margin: number, contentWidth: number,
+  title: string, head: string[], body: string[][], widthFractions: number[]
+): number {
+  if (body.length === 0) return y;
+  if (y > 240) { doc.addPage(); y = margin; }
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.text(title, margin, y);
+  y += 2;
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [head],
+    body,
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [60, 60, 60] },
+    columnStyles: Object.fromEntries(widthFractions.map((f, i) => [i, { cellWidth: contentWidth * f }])),
+  });
+
+  return (doc as any).lastAutoTable.finalY + 8;
+}
 
 export function exportSessionPdf(session: SessionWithTopics) {
   const doc = new jsPDF();
@@ -244,6 +275,50 @@ export function exportSessionPdf(session: SessionWithTopics) {
 
     y = (doc as any).lastAutoTable.finalY + 8;
   }
+
+  // Role-specific sections — only the ones with data appear, same as the Excel export.
+  const requirements = (session.requirements || []) as Requirement[];
+  y = renderTableSection(doc, y, margin, contentWidth, "Requirements", ["Requirement", "Source"],
+    requirements.map(r => [r.text, r.source || "-"]), [0.72, 0.28]);
+
+  const painPoints = (session.painPoints || []) as PainPoint[];
+  y = renderTableSection(doc, y, margin, contentWidth, "Pain Points", ["Pain Point", "Business Impact"],
+    painPoints.map(p => [p.text, p.impact || "-"]), [0.55, 0.45]);
+
+  const sipoc = session.sipocData as SIPOCData | null;
+  if (sipoc) {
+    const { columns, linkedRows, unlinkedRows } = computeSipocRows(sipoc);
+    y = renderTableSection(doc, y, margin, contentWidth, "SIPOC", columns, linkedRows, [0.2, 0.2, 0.2, 0.2, 0.2]);
+    if (unlinkedRows.length > 0) {
+      y = renderTableSection(doc, y, margin, contentWidth, "SIPOC — Not Yet Linked", columns, unlinkedRows, [0.2, 0.2, 0.2, 0.2, 0.2]);
+    }
+  }
+
+  const bant = session.bantData as BANTData | null;
+  if (bant && (bant.budget || bant.authority || bant.needs || bant.timeline)) {
+    const rows = (["budget", "authority", "needs", "timeline"] as const)
+      .filter(key => bant[key])
+      .map(key => [key.charAt(0).toUpperCase() + key.slice(1), bant[key]!.value, bant[key]!.evidence || "-"]);
+    y = renderTableSection(doc, y, margin, contentWidth, "BANT", ["Element", "Value", "Evidence"], rows, [0.15, 0.35, 0.5]);
+  }
+
+  const methodology = session.methodologyProgress as MethodologyProgress | null;
+  if (methodology && methodology.stages.length > 0) {
+    y = renderTableSection(doc, y, margin, contentWidth, "Methodology", ["Stage", "Completed"],
+      methodology.stages.map(s => [s.name, s.completed ? "Yes" : "No"]), [0.8, 0.2]);
+  }
+
+  const competitorMentions = (session.competitorMentions || []) as CompetitorMention[];
+  y = renderTableSection(doc, y, margin, contentWidth, "Competitor Mentions", ["Name", "Context"],
+    competitorMentions.map(c => [c.name, c.context]), [0.3, 0.7]);
+
+  const timelineSignals = (session.timelineSignals || []) as TimelineSignal[];
+  y = renderTableSection(doc, y, margin, contentWidth, "Timeline Signals", ["Date", "Context", "Urgency"],
+    timelineSignals.map(t => [t.date, t.context, t.urgency || "-"]), [0.2, 0.65, 0.15]);
+
+  const riskFlags = (session.riskFlags || []) as RiskFlag[];
+  y = renderTableSection(doc, y, margin, contentWidth, "Risk Flags", ["Item", "Type"],
+    riskFlags.map(r => [r.text, r.type || "-"]), [0.8, 0.2]);
 
   if (session.transcript && session.transcript.length > 0) {
     if (y > 240) { doc.addPage(); y = margin; }

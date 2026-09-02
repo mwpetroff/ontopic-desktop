@@ -8,6 +8,7 @@ import { SIPOC_COLUMNS } from "@/components/sipoc-board";
 import { formatDateForPdf, formatDurationForPdf } from "@/lib/date";
 import { parseAndMergeBlocks, formatElapsedTimestamp } from "@/lib/transcript";
 import { buildExportFilename } from "@/lib/export-filename";
+import { computeSipocRows } from "@/lib/sipoc-rows";
 
 type SessionWithTopics = Session & { topics: Topic[] };
 
@@ -250,31 +251,17 @@ function addSipocSheet(workbook: ExcelJS.Workbook, sipoc: SIPOCData) {
     cell.fill = fill(SIPOC_TAB_HEADER_HEX[colNumber - 1]);
   });
 
-  const hasLinks = !!sipoc.links?.length;
-  if (hasLinks) {
-    for (const link of sipoc.links!) {
-      const row = sheet.addRow(SIPOC_COLUMNS.map((c) => link[c.linkKey] || ""));
-      row.eachCell((cell) => { cell.alignment = { wrapText: true, vertical: "top" }; });
-    }
-    const linkedTextByCategory = new Map(
-      SIPOC_COLUMNS.map((c) => [c.key, new Set(sipoc.links!.map((l) => l[c.linkKey]).filter(Boolean) as string[])])
-    );
-    const unlinked = SIPOC_COLUMNS.map((c) => sipoc[c.key].filter((item) => !linkedTextByCategory.get(c.key)!.has(item.text)));
-    const anyUnlinked = unlinked.some((items) => items.length > 0);
-    if (anyUnlinked) {
-      sheet.addRow([]);
-      const labelRow = sheet.addRow(["Not Yet Linked"]);
-      labelRow.font = { italic: true, color: { argb: "FF888888" } };
-      const maxLen = Math.max(1, ...unlinked.map((items) => items.length));
-      for (let i = 0; i < maxLen; i++) {
-        const row = sheet.addRow(unlinked.map((items) => items[i]?.text || ""));
-        row.eachCell((cell) => { cell.alignment = { wrapText: true, vertical: "top" }; });
-      }
-    }
-  } else {
-    const maxLen = Math.max(1, ...SIPOC_COLUMNS.map((c) => sipoc[c.key].length));
-    for (let i = 0; i < maxLen; i++) {
-      const row = sheet.addRow(SIPOC_COLUMNS.map((c) => sipoc[c.key][i]?.text || ""));
+  const { linkedRows, unlinkedRows } = computeSipocRows(sipoc);
+  for (const rowValues of linkedRows) {
+    const row = sheet.addRow(rowValues);
+    row.eachCell((cell) => { cell.alignment = { wrapText: true, vertical: "top" }; });
+  }
+  if (unlinkedRows.length > 0) {
+    sheet.addRow([]);
+    const labelRow = sheet.addRow(["Not Yet Linked"]);
+    labelRow.font = { italic: true, color: { argb: "FF888888" } };
+    for (const rowValues of unlinkedRows) {
+      const row = sheet.addRow(rowValues);
       row.eachCell((cell) => { cell.alignment = { wrapText: true, vertical: "top" }; });
     }
   }
